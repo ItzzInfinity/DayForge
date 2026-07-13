@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:advanced_todo/features/auth/domain/app_user.dart';
 import 'package:advanced_todo/features/auth/domain/auth_repository.dart';
+import 'package:advanced_todo/features/export/data/export_saver.dart';
 import 'package:advanced_todo/features/tasks/domain/task.dart';
 import 'package:advanced_todo/services/firestore/firestore_gateway.dart';
 import 'package:advanced_todo/services/notifications/reminder_scheduler.dart';
@@ -69,6 +70,23 @@ class FakeReminderScheduler implements ReminderScheduler {
   @override
   Future<void> showNow({required String title, required String body}) async {
     shownNow.add('$title: $body');
+  }
+}
+
+/// Captures exports; keeps widget tests away from file dialogs and disks.
+class FakeExportSaver implements ExportSaver {
+  final saved = <({String fileName, String content})>[];
+
+  /// What save() reports back; set to null to simulate a cancelled dialog.
+  String? destination = '/fake/export';
+
+  @override
+  Future<String?> save({
+    required String fileName,
+    required String content,
+  }) async {
+    if (destination != null) saved.add((fileName: fileName, content: content));
+    return destination;
   }
 }
 

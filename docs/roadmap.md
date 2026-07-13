@@ -54,8 +54,8 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[M]` waiting on man
 ## Phase 5 — Reliability
 - [ ] Offline-first behavior
 - [ ] Multi-device conflict handling
-- [ ] Export to JSON/CSV/Markdown
-- [ ] Backup/restore flow
+- [x] Export to JSON/CSV/Markdown — done 2026-07-13; pure serializers + Settings "Export data" tile; desktop save-as dialog (file_selector), Android share sheet (share_plus)
+- [~] Backup/restore flow — backup covered by JSON export (formatVersion 1); import/restore optional, not started
 - [ ] Error handling and retry states
 
 ## Phase 6 — Polish

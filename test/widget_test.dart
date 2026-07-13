@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +9,7 @@ import 'package:advanced_todo/features/auth/domain/app_user.dart';
 import 'package:advanced_todo/features/auth/domain/auth_repository.dart';
 import 'package:advanced_todo/core/providers.dart';
 import 'package:advanced_todo/features/auth/providers.dart';
+import 'package:advanced_todo/features/export/providers.dart';
 import 'package:advanced_todo/services/firestore/providers.dart';
 import 'package:advanced_todo/services/notifications/providers.dart';
 
@@ -16,6 +19,7 @@ Widget appWith(
   AuthRepository repo, {
   FakeFirestoreGateway? gateway,
   FakeReminderScheduler? scheduler,
+  FakeExportSaver? exportSaver,
 }) {
   return ProviderScope(
     overrides: [
@@ -26,6 +30,7 @@ Widget appWith(
       reminderSchedulerProvider.overrideWithValue(
         scheduler ?? FakeReminderScheduler(),
       ),
+      exportSaverProvider.overrideWithValue(exportSaver ?? FakeExportSaver()),
       currentDateProvider.overrideWithValue(DateTime(2026, 7, 13)),
     ],
     child: const AdvancedTodoApp(),
@@ -70,6 +75,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('a@b.com'), findsOneWidget);
 
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('sign-out')),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
     await tester.tap(find.byKey(const Key('sign-out')));
     await tester.pumpAndSettle();
 
@@ -524,6 +534,90 @@ void main() {
         isFalse,
       );
       expect(find.text('Meditate'), findsNothing);
+    });
+  });
+
+  group('Export data', () {
+    late FakeFirestoreGateway gateway;
+    late FakeExportSaver saver;
+
+    setUp(() {
+      gateway = FakeFirestoreGateway();
+      saver = FakeExportSaver();
+      gateway.docs['users/u/tasks/t1'] = {
+        'title': 'Meditate',
+        'startDate': '2026-07-10',
+        'durationDays': 7,
+        'status': 'active',
+        'createdAt': DateTime.utc(2026, 7, 10),
+        'updatedAt': DateTime.utc(2026, 7, 10),
+      };
+      gateway.docs['users/u/tasks/t1/daily_logs/2026-07-12'] = {
+        'date': '2026-07-12',
+        'completed': true,
+        'remark': 'good session',
+        'completedAt': DateTime.utc(2026, 7, 12, 8),
+        'updatedAt': DateTime.utc(2026, 7, 12, 8),
+      };
+    });
+
+    Future<void> openExportDialog(WidgetTester tester) async {
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester
+          .pumpWidget(appWith(repo, gateway: gateway, exportSaver: saver));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('export-data')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.tap(find.byKey(const Key('export-data')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('JSON export hands the full dataset to the saver',
+        (tester) async {
+      await openExportDialog(tester);
+
+      await tester.tap(find.byKey(const Key('export-json')));
+      await tester.pumpAndSettle();
+
+      final export = saver.saved.single;
+      expect(export.fileName, 'advanced_todo_export_2026-07-13.json');
+      final parsed = jsonDecode(export.content) as Map<String, dynamic>;
+      final task = (parsed['tasks'] as List).single as Map<String, dynamic>;
+      expect(task['title'], 'Meditate');
+      expect(((task['dailyLogs'] as List).single as Map)['remark'],
+          'good session');
+      expect(find.text('Exported to /fake/export'), findsOneWidget);
+    });
+
+    testWidgets('CSV export produces log rows; cancel reports it',
+        (tester) async {
+      await openExportDialog(tester);
+      await tester.tap(find.byKey(const Key('export-csv')));
+      await tester.pumpAndSettle();
+
+      expect(saver.saved.single.fileName,
+          'advanced_todo_export_2026-07-13.csv');
+      expect(saver.saved.single.content,
+          contains('t1,Meditate,,active,2026-07-10,2026-07-16,7,2026-07-12'));
+
+      // Second run: the user cancels the save dialog. Let the first
+      // snackbar's 4s timer expire so the cancel message isn't queued.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      saver.destination = null;
+      await tester.tap(find.byKey(const Key('export-data')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('export-markdown')));
+      await tester.pumpAndSettle();
+
+      expect(saver.saved, hasLength(1)); // nothing new captured
+      expect(find.text('Export cancelled.'), findsOneWidget);
     });
   });
 

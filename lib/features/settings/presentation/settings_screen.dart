@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/providers.dart';
 import '../../../services/notifications/providers.dart';
 import '../../../services/notifications/reminder_scheduler.dart';
 import '../../auth/providers.dart';
+import '../../daily/providers.dart';
+import '../../export/domain/exporters.dart';
+import '../../export/providers.dart';
+import '../../tasks/providers.dart';
 import '../domain/app_settings.dart';
 import '../providers.dart';
 
@@ -71,6 +76,58 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (days == null || days < 1) return;
     await _update(ref, (s) => s.copyWith(defaultDurationDays: days));
+  }
+
+  Future<void> _exportData(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final format = await showDialog<ExportFormat>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Export data as…'),
+        children: [
+          for (final (format, label, hint) in [
+            (ExportFormat.json, 'JSON', 'Full backup, machine-readable'),
+            (ExportFormat.csv, 'CSV', 'Spreadsheets — one row per day'),
+            (ExportFormat.markdown, 'Markdown', 'Readable report'),
+          ])
+            SimpleDialogOption(
+              key: Key('export-${format.name}'),
+              onPressed: () => Navigator.of(context).pop(format),
+              child: ListTile(
+                title: Text(label),
+                subtitle: Text(hint),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
+        ],
+      ),
+    );
+    if (format == null) return;
+
+    final taskRepo = ref.read(taskRepositoryProvider);
+    final logRepo = ref.read(dailyLogRepositoryProvider);
+    if (taskRepo == null || logRepo == null) return;
+    try {
+      final bundle = await gatherExportBundle(
+        taskRepository: taskRepo,
+        dailyLogRepository: logRepo,
+        settings: ref.read(appSettingsProvider).value ?? const AppSettings(),
+        now: ref.read(currentDateProvider),
+      );
+      final destination = await ref.read(exportSaverProvider).save(
+            fileName: exportFileName(bundle, format),
+            content: serializeExport(bundle, format),
+          );
+      messenger.showSnackBar(SnackBar(
+        content: Text(destination == null
+            ? 'Export cancelled.'
+            : destination == 'shared'
+                ? 'Export shared.'
+                : 'Exported to $destination'),
+      ));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Export failed: $e')));
+    }
   }
 
   @override
@@ -150,6 +207,14 @@ class SettingsScreen extends ConsumerWidget {
                 );
               }
             },
+          ),
+          ListTile(
+            key: const Key('export-data'),
+            leading: const Icon(Icons.download_outlined),
+            title: const Text('Export data'),
+            subtitle: const Text('All tasks, daily history and settings — '
+                'JSON, CSV or Markdown'),
+            onTap: () => _exportData(context, ref),
           ),
           const Divider(),
           ListTile(

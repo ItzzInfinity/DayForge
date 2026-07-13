@@ -2,11 +2,20 @@
 
 > Resume protocol: read this file first, continue from **Next step**, do not redo completed work, always run the self-check after each task.
 
-## Current state — 2026-07-13 (session 5) — Phase 3: local notifications COMPLETE
+## Current state — 2026-07-13 (session 8) — Phase 5 in progress
 
-- **Current phase:** Phase 5 — Reliability (starting); PHASE 4 COMPLETE
-- **Last completed task:** Tasks tab management (filters, search, actions)
-- **Next task:** Phase 5 — export to JSON/CSV/Markdown
+- **Current phase:** Phase 5 — Reliability
+- **Last completed task:** Export to JSON/CSV/Markdown
+- **Next task:** Phase 5 — offline/conflict review + error/retry states (see Next step)
+
+### Export summary (2026-07-13, session 8)
+- Deps added: `file_selector`, `share_plus 13.2.0` (v13 API: `SharePlus.instance.share(ShareParams(...))`), `path_provider` — native plugins, so BOTH builds re-verified (Linux release + debug APK; APK pulled Android SDK Platform 35 automatically).
+- `lib/features/export/domain/exporters.dart` — pure: `ExportBundle`/`TaskExport`, `ExportFormat{json,csv,markdown}`, `exportToJson` (formatVersion 1 — future import format; DateTimes → ISO), `exportToCsv` (CRLF, one row per log, log-less tasks keep one row, RFC-quoting), `exportToMarkdown` (section per task + history table, pipes escaped), `exportFileName` (`advanced_todo_export_YYYY-MM-DD.ext`), `serializeExport` switch.
+- `lib/features/export/data/export_saver.dart` — `ExportSaver` interface (returns destination or null=cancelled); `DesktopExportSaver` (file_selector `getSaveLocation` → write) for Linux/Windows; `ShareExportSaver` (temp file → share sheet) for Android.
+- `lib/features/export/providers.dart` — `exportSaverProvider` (platform-picked) + `gatherExportBundle()` (plain function, always fresh reads).
+- Settings tile key `export-data` → SimpleDialog (option keys `export-json`/`export-csv`/`export-markdown`) → gather → serialize → save → snackbar (path / 'Export shared.' / 'Export cancelled.' / failure).
+- Tests: +7 (5 serializer unit in `test/exporters_test.dart` incl. CSV quoting + markdown pipe escaping; 2 widget). `FakeExportSaver` in fakes + `appWith(exportSaver:)` override. **73 total passing.**
+- Gotchas hit: (1) new Settings tile pushed `sign-out` below the fold → existing test needed `scrollUntilVisible`; (2) snackbars queue — second snackbar assertion needs `tester.pump(5s)` first to expire the previous one (4s duration).
 
 ### Tasks management summary (2026-07-13, session 7)
 - `TaskRepository.delete` now cascades: deletes all `daily_logs` docs then the task doc (Firestore has no cascade).
@@ -104,11 +113,12 @@ Tests: 9 passing (`test/widget_test.dart` — auth flow, profile doc, navigation
 ### Blocked
 - Nothing. Manual items M1–M5 all complete; no new manual items open.
 
-### Next step (exact) — Phase 5 start
+### Next step (exact) — Phase 5 remaining
 1. `export PATH="$HOME/development/flutter/bin:$PATH"`
-2. Export: pure serializers in `lib/features/export/domain/exporters.dart` — full user data (tasks + logs + settings) → JSON, CSV (one row per daily log with task columns), Markdown (per-task sections with history). Settings tile "Export data" → pick format → write file (Linux/Windows: `getDownloadsDirectory()` or file_selector save dialog; Android: share or app documents — check `path_provider` capabilities; prefer `file_selector` package for save-as UX, verify platform support). Unit tests on serializers + a widget test.
-3. Note offline/conflict Phase 5 items: Firestore persistence (native) already on; REST gateway is online-only — document as accepted limitation or add later; error/retry states partially exist (per-screen error texts). Backup/restore = export/import (import optional).
-4. Validate: analyze + test + linux build (+apk if deps added).
+2. Offline/conflict review: document in `docs/architecture.md` — native gateway has Firestore persistence (offline-first ✓) and merge writes bound conflicts (per-field last-write-wins; checkbox and remark never clobber each other); REST/Linux gateway is online-only → decide: accept + surface a clear offline error, or add a lightweight read cache. At minimum make REST failures user-legible.
+3. Error/retry states: screens have error text but no retry — add a shared retry widget (message + Retry button that invalidates the failed provider) to Today/Tasks/Progress error paths; widget test with a throwing gateway.
+4. Backup/restore: backup = JSON export (formatVersion 1) — done; import/restore is optional, skip unless user asks.
+5. Validate: analyze + test + linux build (+apk if deps added).
 
 ### Assumptions
 - Sign-out moved from Today appbar to Settings (better daily UX; Today stays minimal).
