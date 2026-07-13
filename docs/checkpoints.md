@@ -2,11 +2,19 @@
 
 > Resume protocol: read this file first, continue from **Next step**, do not redo completed work, always run the self-check after each task.
 
-## Current state — 2026-07-13 (session 8) — PHASES 5 & 6 COMPLETE
+## Current state — 2026-07-13 (session 8) — PROJECT COMPLETE (pending M8 user verification)
 
-- **Current phase:** All FSD phases done — final acceptance sweep next
-- **Last completed task:** Phase 6 polish (onboarding, help text, desktop/mobile layout)
-- **Next task:** FSD acceptance-criteria sweep + final manual verification checklist (see Next step)
+- **Current phase:** Done. All FSD phases (0–6) complete; final acceptance sweep done.
+- **Last completed task:** Final acceptance sweep (requirements.md, qa-checklist.md, README, release artifacts, M8 checklist)
+- **Next task:** None queued — wait for the user's M8 results and fix anything they report. Optional if asked: JSON import/restore, FCM, snooze, Google sign-in.
+
+### Final sweep summary (2026-07-13, session 8)
+- Walked FSD.md acceptance criteria — no code gaps found; docs-only task plus builds.
+- New: `docs/requirements.md` (frozen scope, out-of-scope, criterion→implementation→verification table), `docs/qa-checklist.md` (automated commands, key conventions, device checklist index, platform caveats).
+- README updated: status line, corrected stack (fl_chart was never added — progress bars + calendar grids instead), run instructions for all three platforms.
+- Artifacts: Linux release bundle current; **`build/app/outputs/flutter-apk/app-release.apk` (56.6 MB) built** — user should install over the debug APK (signature differs → may need uninstall).
+- `manual-task.md` M8 added: onboarding on fresh account, cross-device sync (note Linux 10s poll), export JSON/Markdown, synced theme, Android offline queue, Linux offline friendly-error, optional Windows build, filters/progress spot-check.
+- Windows remains the one un-device-verified target (no hardware) — same native SDK path as Android; documented in requirements + M8·7.
 
 ### Phase 6 polish summary (2026-07-13, session 8)
 - `lib/core/widgets/content_width.dart` — `ContentWidth` (Align topCenter + maxWidth 840) wraps the bodies of Today/Tasks/Progress/Settings/TaskDetail; add-task form already capped at 560.
@@ -129,12 +137,10 @@ Tests: 9 passing (`test/widget_test.dart` — auth flow, profile doc, navigation
 ### Blocked
 - Nothing. Manual items M1–M5 all complete; no new manual items open.
 
-### Next step (exact) — final acceptance sweep
-1. `export PATH="$HOME/development/flutter/bin:$PATH"`
-2. Re-read FSD.md acceptance criteria one by one; map each to the implementing code/test; fix any gap found (none known).
-3. Rebuild release artifacts (linux release + apk release or debug per user preference) and write a final manual verification checklist as a new manual task (M8) in `manual-task.md`: fresh sign-up flow, add task, tick+remark, cross-device sync phone↔desktop, reminder fire, export, theme, offline behavior on phone.
-4. Update roadmap Phase 0 leftover (`docs/requirements.md` "expand when needed") — either write the short PRD or mark explicitly skipped as FSD covers it.
-5. Optional leftovers if the user asks: JSON import/restore, FCM push, snooze.
+### Next step (exact)
+1. Wait for the user's M8 verification results (manual-task.md). Fix anything reported, re-validating with `flutter analyze && flutter test && flutter build linux --release`.
+2. If the user requests optional features, order of value: JSON import/restore (reads the formatVersion-1 export) → snooze → FCM → Google sign-in.
+3. No other work is queued. Every phase in docs/roadmap.md is ✔.
 
 ### Assumptions
 - Sign-out moved from Today appbar to Settings (better daily UX; Today stays minimal).

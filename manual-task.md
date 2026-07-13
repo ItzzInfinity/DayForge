@@ -55,6 +55,22 @@ Then walk this checklist (each step maps to an acceptance criterion in FSD.md):
 
 Report anything that fails (with what you saw) and Claude Code will fix it before moving on.
 
+### M8 — Final acceptance verification (all FSD phases complete)
+Fresh artifacts (2026-07-13): Linux `./build/linux/x64/release/bundle/advanced_todo`, Android `build/app/outputs/flutter-apk/app-release.apk` (install this over the old debug APK — it's the faster release build; Android may ask you to uninstall the debug version first because the signature differs).
+
+Covers what M6/M7 didn't. Run the Linux app and have your phone nearby:
+
+- [ ] 1. **Onboarding:** Settings → Sign out, then create a brand-new throwaway account (any email-like string works). The Today screen should explain the 3-step loop with an "Add your first task" button; tap it, create a task, and it should appear on Today immediately. Then sign out and back into your real account.
+- [ ] 2. **Cross-device sync:** with the same account on phone + Linux, tick today's checkbox on the phone → within ~10 seconds the tick shows on Linux after switching tabs or pressing the entry (Linux polls every 10s). Type a remark on Linux → confirm it appears on the phone. Neither edit should overwrite the other.
+- [ ] 3. **Export:** Settings → Export data → JSON → save it somewhere and open the file: your tasks, daily history and settings should all be there. Try Markdown too — it should read like a report.
+- [ ] 4. **Theme:** Settings → Theme → Dark. The app should switch immediately, and still be dark after closing/reopening — on both devices (it's synced).
+- [ ] 5. **Offline (Android):** put the phone in airplane mode, tick today's task, reopen the app — the tick should still be there. Disable airplane mode, wait a moment, and confirm the tick reached Linux/the Firestore console (offline writes queue and sync).
+- [ ] 6. **Offline (Linux):** disconnect Wi-Fi/ethernet on the desktop and switch tabs — you should get a friendly "No connection. Check your internet and retry." message with a Retry button (NOT a technical error dump). Reconnect, press Retry, everything returns. (Linux is online-only by design.)
+- [ ] 7. **(Optional) Windows:** if you ever have a Windows machine: install Flutter there, run `flutter build windows` in this repo, and walk the M7 checklist. The code path is the same native Firebase SDK that already passed on Android.
+- [ ] 8. **Filters/search/progress spot-check:** Tasks tab → search for part of a title; Progress tab → streak flame + % look right; open a task → calendar shows your ticked days in green.
+
+When these pass, every FSD acceptance criterion is user-verified. Anything that fails: note what you saw and Claude Code will fix it.
+
 ## Completed
 - M1 — Create a Firebase project
 - M2 — Enable Email/Password authentication

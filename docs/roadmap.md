@@ -8,7 +8,9 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[M]` waiting on man
 - [x] Define checkpoint/resume format (`docs/checkpoints.md`)
 - [x] Architecture outline (`docs/architecture.md`)
 - [x] Data model outline (`docs/data-model.md`)
-- [ ] Full product requirements document (`docs/requirements.md`) — expand when needed
+- [x] Full product requirements document (`docs/requirements.md`) — done 2026-07-13; final scope, out-of-scope list, acceptance-criteria mapping
+
+**Phase 0 complete ✔ (2026-07-13)**
 
 ## Phase 1 — Foundation
 - [x] Task 1: Create Flutter project (Android, Windows, Linux targets) — done 2026-07-13, `flutter analyze` + `flutter test` pass
@@ -69,3 +71,12 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[M]` waiting on man
 - [x] Help text for daily logging — done 2026-07-13; remark hint now "Optional note for today (how did it go?)"
 
 **Phase 6 complete ✔ (2026-07-13)**
+
+## Final acceptance sweep (2026-07-13)
+- [x] All FSD acceptance criteria mapped to implementation + verification (`docs/requirements.md`)
+- [x] `docs/qa-checklist.md` written (automated checks + device verification + known caveats)
+- [x] README updated (status, correct stack, run instructions)
+- [x] Release artifacts rebuilt: Linux release bundle + `app-release.apk` (56.6 MB)
+- [M] M8 — final user verification checklist (cross-device sync, offline, export, theme, onboarding; Windows optional) — waiting on user
+
+Optional leftovers (only if requested): JSON import/restore · FCM push · snooze/quiet hours · Google sign-in
