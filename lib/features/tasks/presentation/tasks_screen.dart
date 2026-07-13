@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../progress/presentation/task_detail_screen.dart';
 import '../domain/task.dart';
 import '../providers.dart';
 import 'add_task_screen.dart';
@@ -49,6 +50,7 @@ class _TaskTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListTile(
+      key: ValueKey('task-tile-${task.id}'),
       title: Text(task.title),
       subtitle: Text(
         '${task.startDate} → ${task.endDate} · ${task.durationDays} days'
@@ -57,6 +59,11 @@ class _TaskTile extends StatelessWidget {
       trailing: task.status == TaskStatus.active
           ? null
           : Chip(label: Text(task.status.name)),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => TaskDetailScreen(task: task),
+        ),
+      ),
     );
   }
 }

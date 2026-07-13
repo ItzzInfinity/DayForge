@@ -375,6 +375,41 @@ void main() {
       expect(find.text('Starts 2026-08-01'), findsOneWidget);
     });
 
+    testWidgets('task detail shows the calendar and remark history',
+        (tester) async {
+      gateway.docs['users/u/tasks/t1/daily_logs/2026-07-13'] = {
+        'date': '2026-07-13',
+        'completed': true,
+        'remark': 'went well',
+        'updatedAt': DateTime.utc(2026, 7, 13),
+      };
+      await pumpSignedIn(tester);
+
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('task-tile-t1')));
+      await tester.pumpAndSettle();
+
+      // Calendar month for the task range (Jul 13–19) is shown.
+      expect(find.text('July 2026'), findsOneWidget);
+
+      // Tapping the completed day shows the remark.
+      await tester.tap(find.byKey(const ValueKey('cal-2026-07-13')));
+      await tester.pumpAndSettle();
+      expect(find.text('Completed — went well'), findsOneWidget);
+      await tester.tapAt(const Offset(10, 10)); // dismiss dialog
+      await tester.pumpAndSettle();
+
+      // History list (below the calendar) shows the logged day + remark.
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('history-2026-07-13')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.byKey(const ValueKey('history-2026-07-13')), findsOneWidget);
+      expect(find.text('went well'), findsOneWidget);
+    });
+
     testWidgets('existing log state is shown on load', (tester) async {
       gateway.docs['users/u/tasks/t1/daily_logs/2026-07-13'] = {
         'date': '2026-07-13',

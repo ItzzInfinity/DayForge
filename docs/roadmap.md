@@ -44,8 +44,8 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[M]` waiting on man
 ## Phase 4 — Progress tracking
 - [x] Streak calculation — done 2026-07-13; pure `calculateProgress` (streak ends today-or-yesterday; gaps break it), 9 unit tests
 - [x] Completion percentage — done 2026-07-13; completed ÷ elapsed active days, capped at task end; Progress screen with 🔥 streak chip + progress bar per task
-- [ ] Task history timeline
-- [ ] Calendar view
+- [x] Task history timeline — done 2026-07-13; chronological log list with ✓/○ + remarks on the task detail screen
+- [x] Calendar view — done 2026-07-13; per-task month grids (completed/missed/pending-today/future coloring), tap a day for its remark; reachable from Tasks tiles and Progress cards
 - [ ] Filtering by category/status
 - [ ] Search
 

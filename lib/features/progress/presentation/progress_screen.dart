@@ -6,6 +6,7 @@ import '../../daily/providers.dart';
 import '../../tasks/domain/task.dart';
 import '../../tasks/providers.dart';
 import '../domain/progress_calculator.dart';
+import 'task_detail_screen.dart';
 
 class ProgressScreen extends ConsumerWidget {
   const ProgressScreen({super.key});
@@ -54,8 +55,16 @@ class _ProgressCard extends ConsumerWidget {
     final logsAsync = ref.watch(taskLogsProvider(task.id));
     final today = ref.watch(currentDateProvider);
     return Card(
+      key: ValueKey('progress-card-${task.id}'),
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-      child: Padding(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => TaskDetailScreen(task: task),
+          ),
+        ),
+        child: Padding(
         padding: const EdgeInsets.all(16),
         child: logsAsync.when(
           data: (logs) {
@@ -118,6 +127,7 @@ class _ProgressCard extends ConsumerWidget {
             ),
           ),
           error: (error, _) => Text('Could not load logs: $error'),
+          ),
         ),
       ),
     );

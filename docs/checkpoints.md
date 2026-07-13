@@ -5,8 +5,15 @@
 ## Current state — 2026-07-13 (session 5) — Phase 3: local notifications COMPLETE
 
 - **Current phase:** Phase 4 — Progress tracking
-- **Last completed task:** Streaks + completion % + Progress screen
-- **Next task:** Task history timeline + calendar view (per-task detail screen)
+- **Last completed task:** Task detail screen (calendar view + history timeline)
+- **Next task:** Task filtering by category/status + search + archive/delete actions (Tasks tab)
+
+### Calendar/history summary (2026-07-13, session 6)
+- `lib/features/progress/domain/calendar_grid.dart` — pure helpers: `DayStatus{completed,missed,pending,future,outOfRange}` (`pending` = today unticked), `dayStatus()`, `monthsInRange()` (handles year boundary), `monthCells()` (Monday-first, leading nulls), `monthNames` (no intl dep).
+- `lib/features/progress/presentation/task_detail_screen.dart` — per-task: summary (streak chip + X of Y · Z%), month grids (7-col GridView, circular day cells colored by status, tap → dialog with completed/missed/pending + remark; keys `cal-{dateKey}`), History section newest-first (✓/○ icon, date, remark; keys `history-{date}`).
+- Navigation: Tasks tile (key `task-tile-{id}`) and Progress card (key `progress-card-{id}`) both push TaskDetailScreen.
+- Tests: +6 (5 grid unit incl. weekday padding + year boundary; 1 detail widget test — gotcha: history rows are below the fold, use `tester.scrollUntilVisible(..., scrollable: find.byType(Scrollable).last)`). 62 total passing.
+- Validation: analyze clean, 62 tests pass, Linux release rebuilt (Dart-only).
 
 ### Streaks/completion summary (2026-07-13, session 6)
 - `lib/features/progress/domain/progress_calculator.dart` — pure `calculateProgress(task, logs, today)` → `TaskProgress{currentStreak, completedDays, elapsedDays, completionPercent}`. Semantics: streak = consecutive completed days ending today OR yesterday (unticked today doesn't zero it mid-day); elapsed = startDate..min(today, endDate) inclusive, 0 for future tasks; % = completed/elapsed.
@@ -93,8 +100,8 @@ Tests: 9 passing (`test/widget_test.dart` — auth flow, profile doc, navigation
 
 ### Next step (exact)
 1. `export PATH="$HOME/development/flutter/bin:$PATH"`
-2. Task history timeline + calendar view: task detail screen (tap a card on Progress or Tasks) showing a month calendar grid where each day in the task's range is colored (completed / missed / future / today) with the remark shown on tap, plus a simple chronological list of logged days with remarks underneath. Pure date-grid helper + unit tests; reuse `taskLogsProvider`. No new deps needed (hand-rolled grid; fl_chart still optional later).
-3. Then: task filtering by category/status + search (Tasks tab), archive/delete actions on task tiles.
+2. Tasks tab management: filter chips by status (active/completed/archived) and category (distinct categories from tasks), a search TextField filtering by title/description, and per-task actions (popup menu on tile: mark completed / archive / delete with confirm dialog) using `TaskRepository.setStatus`/`delete` + `ref.invalidate(tasksProvider)`. Widget tests for filter, search, archive, delete.
+3. That completes Phase 4 → then Phase 5 (offline/conflict already largely covered by design; export JSON/CSV/Markdown; error/retry states).
 4. Validate: analyze + test + linux build.
 
 ### Assumptions
