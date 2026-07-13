@@ -4,9 +4,15 @@
 
 ## Current state — 2026-07-13 (session 5) — Phase 3: local notifications COMPLETE
 
-- **Current phase:** Phase 4 — Progress tracking
-- **Last completed task:** Task detail screen (calendar view + history timeline)
-- **Next task:** Task filtering by category/status + search + archive/delete actions (Tasks tab)
+- **Current phase:** Phase 5 — Reliability (starting); PHASE 4 COMPLETE
+- **Last completed task:** Tasks tab management (filters, search, actions)
+- **Next task:** Phase 5 — export to JSON/CSV/Markdown
+
+### Tasks management summary (2026-07-13, session 7)
+- `TaskRepository.delete` now cascades: deletes all `daily_logs` docs then the task doc (Firestore has no cascade).
+- Tasks tab rebuilt (`ConsumerStatefulWidget`): search field (key `task-search`, matches title+description), status ChoiceChips (keys `filter-all/active/completed/archived`; **default filter = Active**), dynamic category FilterChips (keys `filter-cat-{name}`), per-tile PopupMenu (key `task-menu-{id}`): Mark completed / Reactivate / Archive / Delete (confirm dialog key `confirm-delete`). Two empty states: no tasks at all vs no filter matches.
+- Tests: +5 (delete-cascades unit; filter default+archived chip, search+category, complete-via-menu, delete-confirm-removes-logs). 66 total passing.
+- Validation: analyze clean, 66 tests pass, Linux release rebuilt (Dart-only).
 
 ### Calendar/history summary (2026-07-13, session 6)
 - `lib/features/progress/domain/calendar_grid.dart` — pure helpers: `DayStatus{completed,missed,pending,future,outOfRange}` (`pending` = today unticked), `dayStatus()`, `monthsInRange()` (handles year boundary), `monthCells()` (Monday-first, leading nulls), `monthNames` (no intl dep).
@@ -98,11 +104,11 @@ Tests: 9 passing (`test/widget_test.dart` — auth flow, profile doc, navigation
 ### Blocked
 - Nothing. Manual items M1–M5 all complete; no new manual items open.
 
-### Next step (exact)
+### Next step (exact) — Phase 5 start
 1. `export PATH="$HOME/development/flutter/bin:$PATH"`
-2. Tasks tab management: filter chips by status (active/completed/archived) and category (distinct categories from tasks), a search TextField filtering by title/description, and per-task actions (popup menu on tile: mark completed / archive / delete with confirm dialog) using `TaskRepository.setStatus`/`delete` + `ref.invalidate(tasksProvider)`. Widget tests for filter, search, archive, delete.
-3. That completes Phase 4 → then Phase 5 (offline/conflict already largely covered by design; export JSON/CSV/Markdown; error/retry states).
-4. Validate: analyze + test + linux build.
+2. Export: pure serializers in `lib/features/export/domain/exporters.dart` — full user data (tasks + logs + settings) → JSON, CSV (one row per daily log with task columns), Markdown (per-task sections with history). Settings tile "Export data" → pick format → write file (Linux/Windows: `getDownloadsDirectory()` or file_selector save dialog; Android: share or app documents — check `path_provider` capabilities; prefer `file_selector` package for save-as UX, verify platform support). Unit tests on serializers + a widget test.
+3. Note offline/conflict Phase 5 items: Firestore persistence (native) already on; REST gateway is online-only — document as accepted limitation or add later; error/retry states partially exist (per-screen error texts). Backup/restore = export/import (import optional).
+4. Validate: analyze + test + linux build (+apk if deps added).
 
 ### Assumptions
 - Sign-out moved from Today appbar to Settings (better daily UX; Today stays minimal).

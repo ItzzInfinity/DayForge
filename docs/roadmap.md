@@ -46,8 +46,10 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[M]` waiting on man
 - [x] Completion percentage — done 2026-07-13; completed ÷ elapsed active days, capped at task end; Progress screen with 🔥 streak chip + progress bar per task
 - [x] Task history timeline — done 2026-07-13; chronological log list with ✓/○ + remarks on the task detail screen
 - [x] Calendar view — done 2026-07-13; per-task month grids (completed/missed/pending-today/future coloring), tap a day for its remark; reachable from Tasks tiles and Progress cards
-- [ ] Filtering by category/status
-- [ ] Search
+- [x] Filtering by category/status — done 2026-07-13; status chips (default Active) + dynamic category chips; complete/reactivate/archive/delete menu per task (delete confirms + cascades to logs)
+- [x] Search — done 2026-07-13; live title/description search on Tasks tab
+
+**Phase 4 complete ✔ (2026-07-13)**
 
 ## Phase 5 — Reliability
 - [ ] Offline-first behavior

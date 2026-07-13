@@ -52,7 +52,15 @@ class TaskRepository {
     );
   }
 
-  Future<void> delete(String id) => _gateway.deleteDocument(_doc(id));
+  /// Deletes the task and its daily logs (Firestore does not cascade
+  /// subcollection deletes; at most durationDays small docs).
+  Future<void> delete(String id) async {
+    final logs = await _gateway.getCollection('${_doc(id)}/daily_logs');
+    for (final log in logs) {
+      await _gateway.deleteDocument('${_doc(id)}/daily_logs/${log.id}');
+    }
+    await _gateway.deleteDocument(_doc(id));
+  }
 
   Future<Task?> getById(String id) async {
     final data = await _gateway.getDocument(_doc(id));

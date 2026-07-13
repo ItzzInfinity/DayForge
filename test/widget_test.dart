@@ -427,6 +427,106 @@ void main() {
     });
   });
 
+  group('Tasks tab management', () {
+    late FakeFirestoreGateway gateway;
+
+    Map<String, dynamic> seed(String title, String status,
+            {String? category}) =>
+        {
+          'title': title,
+          'category': category,
+          'startDate': '2026-07-13',
+          'durationDays': 7,
+          'status': status,
+          'createdAt': DateTime.utc(2026, 7, 1),
+          'updatedAt': DateTime.utc(2026, 7, 1),
+        };
+
+    setUp(() {
+      gateway = FakeFirestoreGateway();
+      gateway.docs['users/u/tasks/t1'] =
+          seed('Meditate', 'active', category: 'health');
+      gateway.docs['users/u/tasks/t2'] = seed('Old habit', 'archived');
+      gateway.docs['users/u/tasks/t3'] =
+          seed('Read book', 'active', category: 'learning');
+    });
+
+    Future<void> pumpTasksTab(WidgetTester tester) async {
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo, gateway: gateway));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Tasks'));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('defaults to active; archived shown via its filter chip',
+        (tester) async {
+      await pumpTasksTab(tester);
+
+      expect(find.text('Meditate'), findsOneWidget);
+      expect(find.text('Old habit'), findsNothing);
+
+      await tester.tap(find.byKey(const Key('filter-archived')));
+      await tester.pumpAndSettle();
+      expect(find.text('Old habit'), findsOneWidget);
+      expect(find.text('Meditate'), findsNothing);
+    });
+
+    testWidgets('search and category filters narrow the list',
+        (tester) async {
+      await pumpTasksTab(tester);
+
+      await tester.enterText(find.byKey(const Key('task-search')), 'read');
+      await tester.pumpAndSettle();
+      expect(find.text('Read book'), findsOneWidget);
+      expect(find.text('Meditate'), findsNothing);
+
+      await tester.enterText(find.byKey(const Key('task-search')), '');
+      await tester.tap(find.byKey(const Key('filter-cat-health')));
+      await tester.pumpAndSettle();
+      expect(find.text('Meditate'), findsOneWidget);
+      expect(find.text('Read book'), findsNothing);
+    });
+
+    testWidgets('menu marks a task completed', (tester) async {
+      await pumpTasksTab(tester);
+
+      await tester.tap(find.byKey(const ValueKey('task-menu-t1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mark completed'));
+      await tester.pumpAndSettle();
+
+      expect(gateway.docs['users/u/tasks/t1']?['status'], 'completed');
+      // Default filter is Active, so it disappears from view.
+      expect(find.text('Meditate'), findsNothing);
+    });
+
+    testWidgets('delete requires confirmation and removes logs',
+        (tester) async {
+      gateway.docs['users/u/tasks/t1/daily_logs/2026-07-13'] = {
+        'date': '2026-07-13',
+        'completed': true,
+        'updatedAt': DateTime.utc(2026, 7, 13),
+      };
+      await pumpTasksTab(tester);
+
+      await tester.tap(find.byKey(const ValueKey('task-menu-t1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('confirm-delete')));
+      await tester.pumpAndSettle();
+
+      expect(gateway.docs.containsKey('users/u/tasks/t1'), isFalse);
+      expect(
+        gateway.docs.containsKey('users/u/tasks/t1/daily_logs/2026-07-13'),
+        isFalse,
+      );
+      expect(find.text('Meditate'), findsNothing);
+    });
+  });
+
   testWidgets('wide layout uses a navigation rail, narrow uses a bottom bar',
       (tester) async {
     final repo =

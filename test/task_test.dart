@@ -111,15 +111,21 @@ void main() {
       expect(loaded.durationDays, 30);
     });
 
-    test('delete removes the task', () async {
+    test('delete removes the task and its daily logs', () async {
       final task = await repo.create(
         title: 'X',
         startDate: '2026-07-13',
         durationDays: 1,
       );
+      gateway.docs['users/u1/tasks/${task.id}/daily_logs/2026-07-13'] = {
+        'date': '2026-07-13',
+        'completed': true,
+        'updatedAt': DateTime.utc(2026, 7, 13),
+      };
       await repo.delete(task.id);
       expect(await repo.getById(task.id), isNull);
       expect(await repo.getAll(), isEmpty);
+      expect(gateway.docs, isEmpty);
     });
   });
 }
