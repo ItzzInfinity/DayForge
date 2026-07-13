@@ -6,6 +6,7 @@ import '../../../core/widgets/content_width.dart';
 import '../../../services/notifications/providers.dart';
 import '../../../services/notifications/reminder_scheduler.dart';
 import '../../auth/providers.dart';
+import '../../daily/presentation/backfill_screen.dart';
 import '../../daily/providers.dart';
 import '../../export/domain/exporters.dart';
 import '../../export/providers.dart';
@@ -252,6 +253,25 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const ArchiveScreen()),
             ),
+          ),
+          const Divider(),
+          ExpansionTile(
+            key: const Key('advanced-section'),
+            leading: const Icon(Icons.tune),
+            title: const Text('Advanced'),
+            children: [
+              ListTile(
+                key: const Key('backfill-history'),
+                leading: const Icon(Icons.history),
+                title: const Text('Backfill task history'),
+                subtitle: const Text('Already working on a habit? '
+                    'Mark past days as done'),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                      builder: (_) => const BackfillScreen()),
+                ),
+              ),
+            ],
           ),
           const Divider(),
           ListTile(

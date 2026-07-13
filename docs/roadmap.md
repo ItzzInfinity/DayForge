@@ -89,3 +89,13 @@ Optional leftovers (only if requested): JSON import/restore · FCM push · Googl
 - [x] Motivational quotes: zenquotes.io quote-of-the-day (free API, cached daily, attributed) with a bundled 593-quote offline rotation; encouragement quote snackbar on every tick
 - [x] Snooze: reminder notifications carry a "Snooze N min" button (Android + Linux; Windows toasts have no action support), duration configurable in Settings (5/10/15/30/60, default 10)
 - [M] M9 — device verification of the above on Linux + Android (see ../manual-task.md)
+
+## Feedback round 2 (2026-07-13, session 10) — user-requested features
+- [x] `Advanced` section in Settings: backfill task dates — done 2026-07-13; Settings → Advanced (ExpansionTile) → Backfill task history: pick a task, tick any day from its start up to today (newest first); merge-safe daily-log writes, streaks/calendar update; +2 widget tests
+- [x] Reminder time can be modified on an existing task — done 2026-07-13; Tasks menu → "Change reminder time": pick a new time or revert to the default; reminders re-sync automatically via the tasksProvider listener; +1 widget test
+- [x] Persistent notification on mobile — done 2026-07-13; Android reminders are `ongoing` + no auto-cancel, stay in the tray until touched (touch dismisses) or an action is tapped
+- [x] Notification "Mark completed" button — done 2026-07-13; Android + Linux action; app-running path writes via the repository (AuthGate-installed handler, screens refresh live), app-closed path (Android background isolate) writes the same merge-safe log doc via the native Firebase SDK; payload now carries taskId; +1 widget test, payload tests updated
+- [x] Today: centered all-done + hidden completed — done 2026-07-13; completed tasks collapse behind "Completed today (N) ^" (tap to expand/collapse); when everything is done the 🎉 banner sits centered on screen with the toggle pinned at the bottom; tests updated +1 new
+- [x] Single Makefile for all builds — done 2026-07-13; `make all` → .apk + .deb into `dist/` (verified: advanced-todo_1.0.0_amd64.deb with /usr/bin wrapper + desktop entry via `tool/build_deb.sh`); `make exe` builds+zips on a Windows host, prints a clear skip elsewhere (Flutter cannot cross-compile desktop targets); also `make test`/`make clean`
+- [x] Progress: GitHub-style activity heatmap — done 2026-07-13; top ⅓ of the screen (clamped 150–280px) shows 20 Monday-first week columns, cells brighten with the day's tick count (relative 0–4 buckets), tooltip per day, Less→More legend, today outlined, newest week docked right; pure helpers in `activity_heatmap.dart`; +6 unit +1 widget test
+- [ ] First-run tutorial overlay: spotlight each section (rest of screen blacked out) with a NEXT button to advance

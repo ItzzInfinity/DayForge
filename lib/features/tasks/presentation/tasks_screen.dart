@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/widgets/content_width.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../../services/notifications/reminder_scheduler.dart'
+    as notifications;
 import '../../progress/presentation/task_detail_screen.dart';
+import '../../settings/providers.dart';
 import '../domain/task.dart';
 import '../providers.dart';
 import 'add_task_screen.dart';
@@ -170,6 +173,72 @@ class _TaskTile extends ConsumerWidget {
     }
   }
 
+  /// Changing the time re-syncs scheduled notifications automatically: the
+  /// AuthGate listens to tasksProvider and re-arms reminders on every change.
+  Future<void> _changeReminder(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final defaultTime =
+        ref.read(appSettingsProvider).value?.defaultReminderTime ??
+            notifications.defaultReminderTime;
+    const pick = '__pick__';
+    final choice = await showDialog<String>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Reminder time'),
+        children: [
+          SimpleDialogOption(
+            key: const Key('reminder-pick'),
+            onPressed: () => Navigator.of(context).pop(pick),
+            child: ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.alarm),
+              title: const Text('Pick a time…'),
+              subtitle: Text('Currently ${task.reminderTime ?? defaultTime}'),
+            ),
+          ),
+          if (task.reminderTime != null)
+            SimpleDialogOption(
+              key: const Key('reminder-clear'),
+              onPressed: () => Navigator.of(context).pop('clear'),
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.restore),
+                title: Text('Use the default ($defaultTime)'),
+              ),
+            ),
+        ],
+      ),
+    );
+    if (choice == null) return;
+
+    String? Function()? newTime;
+    if (choice == pick) {
+      if (!context.mounted) return;
+      final parts = notifications
+          .parseHhMm(task.reminderTime ?? defaultTime);
+      final picked = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay(hour: parts.hour, minute: parts.minute),
+      );
+      if (picked == null) return;
+      final formatted = '${picked.hour.toString().padLeft(2, '0')}:'
+          '${picked.minute.toString().padLeft(2, '0')}';
+      newTime = () => formatted;
+    } else {
+      newTime = () => null;
+    }
+
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final saved = await repo.save(task.copyWith(reminderTime: newTime));
+    ref.invalidate(tasksProvider);
+    messenger.showSnackBar(SnackBar(
+      content: Text(saved.reminderTime == null
+          ? 'Reminder follows the default time ($defaultTime).'
+          : 'Reminder set to ${saved.reminderTime}.'),
+    ));
+  }
+
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -222,6 +291,7 @@ class _TaskTile extends ConsumerWidget {
             onSelected: (action) => switch (action) {
               'complete' => _setStatus(context, ref, TaskStatus.completed),
               'reactivate' => _setStatus(context, ref, TaskStatus.active),
+              'reminder' => _changeReminder(context, ref),
               'archive' => _setStatus(context, ref, TaskStatus.archived),
               'delete' => _delete(context, ref),
               _ => Future<void>.value(),
@@ -236,6 +306,11 @@ class _TaskTile extends ConsumerWidget {
                 const PopupMenuItem(
                   value: 'reactivate',
                   child: Text('Reactivate'),
+                ),
+              if (task.status == TaskStatus.active)
+                const PopupMenuItem(
+                  value: 'reminder',
+                  child: Text('Change reminder time'),
                 ),
               const PopupMenuItem(value: 'archive', child: Text('Archive')),
               const PopupMenuItem(value: 'delete', child: Text('Delete')),

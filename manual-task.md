@@ -60,27 +60,27 @@ Fresh artifacts (2026-07-13): Linux `./build/linux/x64/release/bundle/advanced_t
 
 Covers what M6/M7 didn't. Run the Linux app and have your phone nearby:
 
-- [ ] 1. **Onboarding:** Settings → Sign out, then create a brand-new throwaway account (any email-like string works). The Today screen should explain the 3-step loop with an "Add your first task" button; tap it, create a task, and it should appear on Today immediately. Then sign out and back into your real account.
-- [ ] 2. **Cross-device sync:** with the same account on phone + Linux, tick today's checkbox on the phone → within ~10 seconds the tick shows on Linux after switching tabs or pressing the entry (Linux polls every 10s). Type a remark on Linux → confirm it appears on the phone. Neither edit should overwrite the other.
-- [ ] 3. **Export:** Settings → Export data → JSON → save it somewhere and open the file: your tasks, daily history and settings should all be there. Try Markdown too — it should read like a report.
-- [ ] 4. **Theme:** Settings → Theme → Dark. The app should switch immediately, and still be dark after closing/reopening — on both devices (it's synced).
-- [ ] 5. **Offline (Android):** put the phone in airplane mode, tick today's task, reopen the app — the tick should still be there. Disable airplane mode, wait a moment, and confirm the tick reached Linux/the Firestore console (offline writes queue and sync).
-- [ ] 6. **Offline (Linux):** disconnect Wi-Fi/ethernet on the desktop and switch tabs — you should get a friendly "No connection. Check your internet and retry." message with a Retry button (NOT a technical error dump). Reconnect, press Retry, everything returns. (Linux is online-only by design.)
+- [x] 1. **Onboarding:** Settings → Sign out, then create a brand-new throwaway account (any email-like string works). The Today screen should explain the 3-step loop with an "Add your first task" button; tap it, create a task, and it should appear on Today immediately. Then sign out and back into your real account.
+- [x] 2. **Cross-device sync:** with the same account on phone + Linux, tick today's checkbox on the phone → within ~10 seconds the tick shows on Linux after switching tabs or pressing the entry (Linux polls every 10s). Type a remark on Linux → confirm it appears on the phone. Neither edit should overwrite the other.
+- [x] 3. **Export:** Settings → Export data → JSON → save it somewhere and open the file: your tasks, daily history and settings should all be there. Try Markdown too — it should read like a report.
+- [x] 4. **Theme:** Settings → Theme → Dark. The app should switch immediately, and still be dark after closing/reopening — on both devices (it's synced).
+- [x] 5. **Offline (Android):** put the phone in airplane mode, tick today's task, reopen the app — the tick should still be there. Disable airplane mode, wait a moment, and confirm the tick reached Linux/the Firestore console (offline writes queue and sync).
+- [x] 6. **Offline (Linux):** disconnect Wi-Fi/ethernet on the desktop and switch tabs — you should get a friendly "No connection. Check your internet and retry." message with a Retry button (NOT a technical error dump). Reconnect, press Retry, everything returns. (Linux is online-only by design.)
 - [ ] 7. **(Optional) Windows:** if you ever have a Windows machine: install Flutter there, run `flutter build windows` in this repo, and walk the M7 checklist. The code path is the same native Firebase SDK that already passed on Android.
-- [ ] 8. **Filters/search/progress spot-check:** Tasks tab → search for part of a title; Progress tab → streak flame + % look right; open a task → calendar shows your ticked days in green.
+- [x] 8. **Filters/search/progress spot-check:** Tasks tab → search for part of a title; Progress tab → streak flame + % look right; open a task → calendar shows your ticked days in green.
 
 When these pass, every FSD acceptance criterion is user-verified. Anything that fails: note what you saw and Claude Code will fix it.
 
 ### M9 — Verify feedback-round-1 features (2026-07-13)
 Fresh artifacts: Linux `./build/linux/x64/release/bundle/advanced_todo`, Android `build/app/outputs/flutter-apk/app-release.apk` (58 MB — install over the previous release APK; same signature, no uninstall needed).
 
-- [ ] 1. **Calendar readability (both devices):** open any task's detail — day numbers in the circles should now be clearly readable, and on Linux the calendar shouldn't stretch into giant circles.
-- [ ] 2. **Archive flow:** Tasks tab → archive a task from its menu — it vanishes from the list (a snackbar points to Settings). Settings → Archived tasks → restore it (back to Active) or delete it. The Archived filter chip is gone from the Tasks tab.
-- [ ] 3. **Filter double-tap:** Tasks tab → tap "Active" (already selected) — filter resets to All. Same for Completed.
+- [x] 1. **Calendar readability (both devices):** open any task's detail — day numbers in the circles should now be clearly readable, and on Linux the calendar shouldn't stretch into giant circles.
+- [x] 2. **Archive flow:** Tasks tab → archive a task from its menu — it vanishes from the list (a snackbar points to Settings). Settings → Archived tasks → restore it (back to Active) or delete it. The Archived filter chip is gone from the Tasks tab.
+- [x] 3. **Filter double-tap:** Tasks tab → tap "Active" (already selected) — filter resets to All. Same for Completed.
 - [ ] 4. **Completed-to-bottom + congrats:** with 2+ tasks active today, tick one — it moves under "Completed today". Tick all — a 🎉 "All done for today!" banner pops in.
-- [ ] 5. **Quotes:** Today shows a quote under the app bar (online: with "· zenquotes.io"; offline: from the bundled list — should still appear). Tick a task — a quote snackbar appears. Tomorrow the daily quote should differ.
-- [ ] 6. **Snooze (Android):** set a task reminder ~2 min ahead, close the app. When the notification arrives it has a "Snooze 10 min" button — tap it; the notification should return ~10 min later (repeatable). Change Settings → Snooze duration to 5 and confirm the button label updates on the next reminder.
-- [ ] 7. **Snooze (Linux, app running):** same — the desktop notification shows a Snooze button; tapping it re-notifies after the set duration while the app stays open.
+- [x] 5. **Quotes:** Today shows a quote under the app bar (online: with "· zenquotes.io"; offline: from the bundled list — should still appear). Tick a task — a quote snackbar appears. Tomorrow the daily quote should differ.
+- [x] 6. **Snooze (Android):** set a task reminder ~2 min ahead, close the app. When the notification arrives it has a "Snooze 10 min" button — tap it; the notification should return ~10 min later (repeatable). Change Settings → Snooze duration to 5 and confirm the button label updates on the next reminder.
+- [x] 7. **Snooze (Linux, app running):** same — the desktop notification shows a Snooze button; tapping it re-notifies after the set duration while the app stays open.
 
 ## Completed
 - M1 — Create a Firebase project

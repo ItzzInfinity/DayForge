@@ -10,6 +10,7 @@ import 'package:advanced_todo/features/auth/domain/auth_repository.dart';
 import 'package:advanced_todo/core/providers.dart';
 import 'package:advanced_todo/features/auth/providers.dart';
 import 'package:advanced_todo/features/export/providers.dart';
+import 'package:advanced_todo/features/onboarding/providers.dart';
 import 'package:advanced_todo/services/firestore/providers.dart';
 import 'package:advanced_todo/services/notifications/providers.dart';
 
@@ -20,6 +21,7 @@ Widget appWith(
   FakeFirestoreGateway? gateway,
   FakeReminderScheduler? scheduler,
   FakeExportSaver? exportSaver,
+  FakeTutorialStore? tutorialStore,
 }) {
   return ProviderScope(
     overrides: [
@@ -31,6 +33,10 @@ Widget appWith(
         scheduler ?? FakeReminderScheduler(),
       ),
       exportSaverProvider.overrideWithValue(exportSaver ?? FakeExportSaver()),
+      // Default "already seen": the first-run tour has its own tests.
+      tutorialStoreProvider.overrideWithValue(
+        tutorialStore ?? FakeTutorialStore(),
+      ),
       currentDateProvider.overrideWithValue(DateTime(2026, 7, 13)),
     ],
     child: const AdvancedTodoApp(),
@@ -163,6 +169,45 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(scheduler.syncedTaskLists.last.map((t) => t.title), ['Stretch']);
+  });
+
+  testWidgets(
+      'notification "Mark completed" handler ticks today\'s log for the task',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    gateway.docs['users/u/tasks/t1'] = {
+      'title': 'Meditate',
+      'startDate': '2026-07-13',
+      'durationDays': 7,
+      'status': 'active',
+      'createdAt': DateTime.utc(2026, 7, 1),
+      'updatedAt': DateTime.utc(2026, 7, 1),
+    };
+    final scheduler = FakeReminderScheduler();
+    await tester
+        .pumpWidget(appWith(repo, gateway: gateway, scheduler: scheduler));
+    await tester.pumpAndSettle();
+
+    // AuthGate must have installed the foreground mark-completed handler.
+    expect(scheduler.onMarkCompleted, isNotNull);
+    await scheduler.onMarkCompleted!('t1');
+    await tester.pumpAndSettle();
+
+    final log = gateway.docs['users/u/tasks/t1/daily_logs/2026-07-13'];
+    expect(log, isNotNull);
+    expect(log!['completed'], isTrue);
+    expect(log['completedAt'], isNotNull);
+
+    // The Today screen reflects it without a manual refresh: everything is
+    // done, so the banner shows and the card sits behind the toggle.
+    expect(find.byKey(const Key('all-done-banner')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('completed-toggle')));
+    await tester.pumpAndSettle();
+    final checkbox = tester
+        .widget<CheckboxListTile>(find.byKey(const ValueKey('tick-t1')));
+    expect(checkbox.value, isTrue);
   });
 
   group('Settings preferences', () {
@@ -354,6 +399,13 @@ void main() {
       expect(log!['completed'], isTrue);
       expect(log['completedAt'], isNotNull);
 
+      // The ticked card moved behind the Completed toggle — expand it once
+      // the encouragement snackbar (4s) no longer covers the bottom row.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('completed-toggle')));
+      await tester.pumpAndSettle();
+
       // Unticking clears completedAt but keeps the doc. (Re-read: the fake
       // gateway replaces the stored map on every merge write.)
       await tester.tap(find.byKey(const ValueKey('tick-t1')));
@@ -406,6 +458,37 @@ void main() {
       );
       // Future task appears too (not archived), showing its start date.
       expect(find.text('Starts 2026-08-01'), findsOneWidget);
+    });
+
+    testWidgets('Progress heatmap plots per-day tick counts', (tester) async {
+      gateway.docs['users/u/tasks/t1/daily_logs/2026-07-12'] = {
+        'date': '2026-07-12',
+        'completed': true,
+        'updatedAt': DateTime.utc(2026, 7, 12),
+      };
+      await pumpSignedIn(tester);
+
+      await tester.tap(find.text('Progress'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('activity-heatmap')), findsOneWidget);
+      final cell = find.byKey(const ValueKey('heat-2026-07-12'));
+      expect(cell, findsOneWidget);
+      final tooltip = tester.widget<Tooltip>(
+        find.ancestor(of: cell, matching: find.byType(Tooltip)).first,
+      );
+      expect(tooltip.message, '1 done · 2026-07-12');
+      // Untouched days plot zero; future days have no cell at all.
+      final emptyTooltip = tester.widget<Tooltip>(
+        find
+            .ancestor(
+              of: find.byKey(const ValueKey('heat-2026-07-11')),
+              matching: find.byType(Tooltip),
+            )
+            .first,
+      );
+      expect(emptyTooltip.message, '0 done · 2026-07-11');
+      expect(find.byKey(const ValueKey('heat-2026-07-14')), findsNothing);
     });
 
     testWidgets('task detail shows the calendar and remark history',
@@ -466,13 +549,17 @@ void main() {
       };
       await pumpSignedIn(tester);
 
+      // Pre-completed → hidden behind the Completed toggle; expand it.
+      await tester.tap(find.byKey(const Key('completed-toggle')));
+      await tester.pumpAndSettle();
       final checkbox = tester.widget<CheckboxListTile>(
           find.byKey(const ValueKey('tick-t1')));
       expect(checkbox.value, isTrue);
       expect(find.text('done early'), findsOneWidget);
     });
 
-    testWidgets('ticked tasks sink below pending under a Completed header',
+    testWidgets(
+        'ticked tasks hide behind the Completed header until expanded',
         (tester) async {
       gateway.docs['users/u/tasks/t3'] =
           seedTask('Journal', '2026-07-13', 7);
@@ -483,18 +570,30 @@ void main() {
       };
       await pumpSignedIn(tester);
 
-      expect(find.byKey(const Key('completed-header')), findsOneWidget);
+      // Completed Journal is hidden; only the header with its count shows.
+      expect(find.text('Completed today (1)'), findsOneWidget);
+      expect(find.text('Journal'), findsNothing);
       expect(find.byKey(const Key('all-done-banner')), findsNothing);
-      // Completed Journal renders below pending Meditate and the header.
+
+      // Expanding reveals it below pending Meditate and the header.
+      await tester.tap(find.byKey(const Key('completed-toggle')));
+      await tester.pumpAndSettle();
       final meditateY = tester.getTopLeft(find.text('Meditate')).dy;
       final headerY =
           tester.getTopLeft(find.byKey(const Key('completed-header'))).dy;
       final journalY = tester.getTopLeft(find.text('Journal')).dy;
       expect(meditateY, lessThan(headerY));
       expect(headerY, lessThan(journalY));
+
+      // Collapsing hides it again.
+      await tester.tap(find.byKey(const Key('completed-toggle')));
+      await tester.pumpAndSettle();
+      expect(find.text('Journal'), findsNothing);
     });
 
-    testWidgets('ticking the last pending task shows the congrats banner',
+    testWidgets(
+        'ticking the last pending task centres the congrats banner and '
+        'hides the completed tasks',
         (tester) async {
       await pumpSignedIn(tester);
       expect(find.byKey(const Key('all-done-banner')), findsNothing);
@@ -506,8 +605,21 @@ void main() {
       expect(find.text('All done for today!'), findsOneWidget);
       // Ticking also pops an encouragement quote snackbar.
       expect(find.textContaining('✓ '), findsOneWidget);
+      // The banner sits centred on the screen, not at the top.
+      final bannerCenter =
+          tester.getCenter(find.byKey(const Key('all-done-banner')));
+      final screen = tester.getSize(find.byType(Scaffold).first);
+      expect(bannerCenter.dy, greaterThan(screen.height * 0.25));
+      expect(bannerCenter.dy, lessThan(screen.height * 0.75));
+      // The ticked task is tucked away until the header is expanded.
+      expect(find.byKey(const ValueKey('tick-t1')), findsNothing);
 
-      // Unticking brings the task back up and removes the banner.
+      // Expand once the snackbar (4s) clears the bottom row, then untick:
+      // the task returns to pending and the banner goes.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('completed-toggle')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey('tick-t1')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('all-done-banner')), findsNothing);
@@ -575,6 +687,34 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Done thing'), findsOneWidget);
       expect(find.text('Meditate'), findsOneWidget);
+    });
+
+    testWidgets('Change reminder time sets and clears a per-task override',
+        (tester) async {
+      await pumpTasksTab(tester);
+
+      await tester.tap(find.byKey(const ValueKey('task-menu-t1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change reminder time'));
+      await tester.pumpAndSettle();
+
+      // No per-task time yet → only "Pick a time…", showing the default.
+      expect(find.text('Currently 08:00'), findsOneWidget);
+      expect(find.byKey(const Key('reminder-clear')), findsNothing);
+      await tester.tap(find.byKey(const Key('reminder-pick')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK')); // accept the pre-filled 08:00
+      await tester.pumpAndSettle();
+      expect(gateway.docs['users/u/tasks/t1']!['reminderTime'], '08:00');
+
+      // With an override set, the clear option appears and removes it.
+      await tester.tap(find.byKey(const ValueKey('task-menu-t1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change reminder time'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('reminder-clear')));
+      await tester.pumpAndSettle();
+      expect(gateway.docs['users/u/tasks/t1']!['reminderTime'], isNull);
     });
 
     testWidgets('Settings → Archived tasks lists, restores and deletes',
@@ -876,5 +1016,148 @@ void main() {
 
     expect(find.text('Enter a valid email'), findsOneWidget);
     expect(find.text('Password must be at least 6 characters'), findsOneWidget);
+  });
+
+  group('First-run tutorial', () {
+    testWidgets('spotlights each section, NEXT walks the tabs, DONE ends it',
+        (tester) async {
+      final store = FakeTutorialStore(seen: false);
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo, tutorialStore: store));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('tutorial-overlay')), findsOneWidget);
+      expect(find.text('Today — your daily checklist'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('tutorial-next')));
+      await tester.pumpAndSettle();
+      expect(find.text('Tasks — add and manage'), findsOneWidget);
+      // The tour switches to the tab it describes.
+      expect(find.byKey(const Key('add-task')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('tutorial-next')));
+      await tester.pumpAndSettle();
+      expect(find.text('Progress — watch it grow'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('tutorial-next')));
+      await tester.pumpAndSettle();
+      expect(find.text('Settings — make it yours'), findsOneWidget);
+      expect(find.text('DONE'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('tutorial-next')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('tutorial-overlay')), findsNothing);
+      expect(store.seen, isTrue);
+    });
+
+    testWidgets('Skip ends the tour immediately and marks it seen',
+        (tester) async {
+      final store = FakeTutorialStore(seen: false);
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo, tutorialStore: store));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('tutorial-overlay')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('tutorial-skip')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('tutorial-overlay')), findsNothing);
+      expect(store.seen, isTrue);
+    });
+
+    testWidgets('a device that has seen the tour never shows it',
+        (tester) async {
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo)); // default store: seen
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('tutorial-overlay')), findsNothing);
+    });
+  });
+
+  group('Backfill task history', () {
+    late FakeFirestoreGateway gateway;
+
+    setUp(() {
+      gateway = FakeFirestoreGateway();
+      // Started 5 days before "today" (2026-07-13), so 6 backfillable days.
+      gateway.docs['users/u/tasks/t1'] = {
+        'title': 'Meditate',
+        'description': null,
+        'category': null,
+        'startDate': '2026-07-08',
+        'durationDays': 21,
+        'reminderTime': null,
+        'status': 'active',
+        'createdAt': DateTime.utc(2026, 7, 13),
+        'updatedAt': DateTime.utc(2026, 7, 13),
+      };
+    });
+
+    Future<void> openBackfill(WidgetTester tester) async {
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo, gateway: gateway));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('advanced-section')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.ensureVisible(find.byKey(const Key('advanced-section')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('advanced-section')));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byKey(const Key('backfill-history')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('backfill-history')));
+      await tester.pumpAndSettle();
+    }
+
+    testWidgets('ticking a past day writes its daily log', (tester) async {
+      await openBackfill(tester);
+
+      expect(find.text('Backfill task history'), findsWidgets);
+      await tester.tap(find.byKey(const Key('backfill-task')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Meditate').last);
+      await tester.pumpAndSettle();
+
+      // Newest first: today tops the list; a past day is further down.
+      await tester.tap(find.byKey(const ValueKey('backfill-2026-07-10')));
+      await tester.pumpAndSettle();
+
+      final log = gateway.docs['users/u/tasks/t1/daily_logs/2026-07-10'];
+      expect(log, isNotNull);
+      expect(log!['completed'], isTrue);
+      expect(log['completedAt'], isNotNull);
+    });
+
+    testWidgets('day list covers start..today only — no future days',
+        (tester) async {
+      await openBackfill(tester);
+
+      await tester.tap(find.byKey(const Key('backfill-task')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Meditate').last);
+      await tester.pumpAndSettle();
+
+      // 6 days: 2026-07-08 .. 2026-07-13 (today), newest first.
+      expect(find.text('2026-07-13 · today'), findsOneWidget);
+      expect(find.byKey(const ValueKey('backfill-2026-07-14')), findsNothing);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('backfill-2026-07-08')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.text('Day 1 of 21'), findsOneWidget);
+      expect(find.byKey(const ValueKey('backfill-2026-07-07')), findsNothing);
+    });
   });
 }

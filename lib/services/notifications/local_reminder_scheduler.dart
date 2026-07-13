@@ -1,35 +1,74 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart' show debugPrint, kIsWeb;
+import 'package:flutter/widgets.dart' show WidgetsFlutterBinding;
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../../core/utils/date_utils.dart';
 import '../../features/tasks/domain/task.dart';
+import '../../firebase_options.dart';
 import 'reminder_scheduler.dart';
 
-/// Handles the Snooze action while the app process is NOT running
+/// Handles notification actions while the app process is NOT running
 /// (Android only: actions with showsUserInterface=false arrive in a
-/// background isolate). Schedules a one-shot repeat of the reminder.
+/// background isolate). Snooze schedules a one-shot repeat; Mark completed
+/// writes today's daily log straight to Firestore via the native SDK.
 @pragma('vm:entry-point')
-void notificationActionBackground(NotificationResponse response) {
-  if (response.actionId != snoozeActionId) return;
-  final payload = decodeSnoozePayload(response.payload);
+Future<void> notificationActionBackground(NotificationResponse response) async {
+  final payload = decodeReminderPayload(response.payload);
   if (payload == null) return;
-  tzdata.initializeTimeZones();
-  FlutterLocalNotificationsPlugin().zonedSchedule(
-    id: snoozeNotificationId(response.id ?? 0),
-    title: payload.title,
-    body: payload.body,
-    scheduledDate: tz.TZDateTime.now(tz.UTC)
-        .add(Duration(minutes: payload.minutes)),
-    notificationDetails:
-        LocalReminderScheduler.detailsWithSnooze(payload.minutes),
-    payload: response.payload,
-    androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-  );
+  if (response.actionId == snoozeActionId) {
+    tzdata.initializeTimeZones();
+    await FlutterLocalNotificationsPlugin().zonedSchedule(
+      id: snoozeNotificationId(response.id ?? 0),
+      title: payload.title,
+      body: payload.body,
+      scheduledDate: tz.TZDateTime.now(tz.UTC)
+          .add(Duration(minutes: payload.minutes)),
+      notificationDetails:
+          LocalReminderScheduler.reminderDetails(payload.minutes),
+      payload: response.payload,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+    );
+  } else if (response.actionId == markDoneActionId) {
+    await markCompletedFromBackground(payload.taskId);
+  }
+}
+
+/// Ticks today's log for [taskId] from the Android background isolate:
+/// same merge-safe document the Today screen writes, so nothing clobbers.
+/// The signed-in user comes from the native Firebase SDK, which persists
+/// sessions across processes; offline taps queue via Firestore persistence.
+Future<void> markCompletedFromBackground(String taskId) async {
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform);
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      debugPrint('reminders: mark-done skipped, no signed-in user');
+      return;
+    }
+    final now = DateTime.now();
+    final dateKey = toDateKey(now);
+    await FirebaseFirestore.instance
+        .doc('users/$uid/tasks/$taskId/daily_logs/$dateKey')
+        .set({
+      'date': dateKey,
+      'completed': true,
+      'completedAt': now.toUtc(),
+      'updatedAt': now.toUtc(),
+    }, SetOptions(merge: true));
+    debugPrint('reminders: marked $taskId completed for $dateKey (background)');
+  } catch (e) {
+    debugPrint('reminders: background mark-done failed: $e');
+  }
 }
 
 /// [ReminderScheduler] backed by flutter_local_notifications.
@@ -41,6 +80,11 @@ class LocalReminderScheduler implements ReminderScheduler {
   final _plugin = FlutterLocalNotificationsPlugin();
   final _linuxTimers = <int, Timer>{};
   bool _initialized = false;
+
+  /// Set by the app shell (AuthGate); handles Mark completed while the app
+  /// runs, so providers refresh and the Today screen updates live.
+  @override
+  Future<void> Function(String taskId)? onMarkCompleted;
 
   static const _windowsDaysAhead = 7;
 
@@ -65,12 +109,32 @@ class LocalReminderScheduler implements ReminderScheduler {
     _initialized = true;
   }
 
-  /// Snooze action tapped while the app runs (always the case on Linux,
-  /// where reminders only exist in-process; possible on Android too).
+  /// Notification touched or an action tapped while the app runs (always
+  /// the case on Linux, where reminders only exist in-process; possible on
+  /// Android too).
   Future<void> _onResponse(NotificationResponse response) async {
-    if (response.actionId != snoozeActionId) return;
-    final payload = decodeSnoozePayload(response.payload);
+    // A plain touch dismisses the (persistent) reminder — that's the deal:
+    // it stays in the tray until touched or marked completed.
+    if (response.actionId == null) {
+      if (response.id != null) await _plugin.cancel(id: response.id!);
+      return;
+    }
+    final payload = decodeReminderPayload(response.payload);
     if (payload == null) return;
+
+    if (response.actionId == markDoneActionId) {
+      debugPrint('reminders: mark-done tapped for task ${payload.taskId}');
+      if (response.id != null) await _plugin.cancel(id: response.id!);
+      final handler = onMarkCompleted;
+      if (handler != null) {
+        await handler(payload.taskId);
+      } else if (Platform.isAndroid) {
+        await markCompletedFromBackground(payload.taskId);
+      }
+      return;
+    }
+
+    if (response.actionId != snoozeActionId) return;
     final id = snoozeNotificationId(response.id ?? 0);
     debugPrint('reminders: snoozing id ${response.id} for '
         '${payload.minutes} min');
@@ -82,7 +146,7 @@ class LocalReminderScheduler implements ReminderScheduler {
           id: id,
           title: payload.title,
           body: payload.body,
-          notificationDetails: detailsWithSnooze(payload.minutes),
+          notificationDetails: reminderDetails(payload.minutes),
           payload: response.payload,
         );
       });
@@ -93,7 +157,7 @@ class LocalReminderScheduler implements ReminderScheduler {
         body: payload.body,
         scheduledDate: tz.TZDateTime.now(tz.UTC)
             .add(Duration(minutes: payload.minutes)),
-        notificationDetails: detailsWithSnooze(payload.minutes),
+        notificationDetails: reminderDetails(payload.minutes),
         payload: response.payload,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
@@ -112,9 +176,11 @@ class LocalReminderScheduler implements ReminderScheduler {
     return true; // Windows/Linux have no runtime notification permission.
   }
 
-  /// Reminder details incl. a Snooze button (Android + Linux; the Windows
-  /// plugin has no action support, so toasts there are snooze-less).
-  static NotificationDetails detailsWithSnooze(int snoozeMinutes) =>
+  /// Reminder details: Mark completed + Snooze buttons (Android + Linux;
+  /// the Windows plugin has no action support, so toasts there are plain).
+  /// On Android the notification is persistent (`ongoing`, no auto-cancel):
+  /// it stays in the tray until touched or marked completed.
+  static NotificationDetails reminderDetails(int snoozeMinutes) =>
       NotificationDetails(
         android: AndroidNotificationDetails(
           'daily_reminders',
@@ -122,7 +188,15 @@ class LocalReminderScheduler implements ReminderScheduler {
           channelDescription: 'Reminds you to tick your daily tasks',
           importance: Importance.high,
           priority: Priority.high,
+          ongoing: true,
+          autoCancel: false,
           actions: [
+            AndroidNotificationAction(
+              markDoneActionId,
+              'Mark completed',
+              showsUserInterface: false,
+              cancelNotification: true,
+            ),
             AndroidNotificationAction(
               snoozeActionId,
               'Snooze $snoozeMinutes min',
@@ -133,6 +207,10 @@ class LocalReminderScheduler implements ReminderScheduler {
         ),
         linux: LinuxNotificationDetails(
           actions: [
+            LinuxNotificationAction(
+              key: markDoneActionId,
+              label: 'Mark completed',
+            ),
             LinuxNotificationAction(
               key: snoozeActionId,
               label: 'Snooze $snoozeMinutes min',
@@ -190,10 +268,11 @@ class LocalReminderScheduler implements ReminderScheduler {
       if (task.endDate.compareTo(todayKey) < 0) continue;
       final time = parseHhMm(task.reminderTime ?? defaultTime);
       final baseId = stableNotificationId(task.id) * 10;
-      final payload = encodeSnoozePayload(
+      final payload = encodeReminderPayload(
         title: 'Advanced To-Do',
         body: _bodyFor(task),
         minutes: snoozeMinutes,
+        taskId: task.id,
       );
 
       if (Platform.isAndroid) {
@@ -205,7 +284,7 @@ class LocalReminderScheduler implements ReminderScheduler {
             nextOccurrence(now, time.hour, time.minute).toUtc(),
             tz.UTC,
           ),
-          notificationDetails: detailsWithSnooze(snoozeMinutes),
+          notificationDetails: reminderDetails(snoozeMinutes),
           payload: payload,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.time,
@@ -221,7 +300,7 @@ class LocalReminderScheduler implements ReminderScheduler {
             title: 'Advanced To-Do',
             body: _bodyFor(task),
             scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
-            notificationDetails: detailsWithSnooze(snoozeMinutes),
+            notificationDetails: reminderDetails(snoozeMinutes),
             payload: payload,
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           );
@@ -252,7 +331,7 @@ class LocalReminderScheduler implements ReminderScheduler {
           id: id,
           title: 'Advanced To-Do',
           body: _bodyFor(task),
-          notificationDetails: detailsWithSnooze(snoozeMinutes),
+          notificationDetails: reminderDetails(snoozeMinutes),
           payload: payload,
         );
         debugPrint('reminders: fired "${task.title}" (id $id)');

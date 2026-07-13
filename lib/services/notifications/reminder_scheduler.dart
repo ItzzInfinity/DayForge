@@ -8,6 +8,9 @@ const defaultReminderTime = '08:00';
 /// Action id of the notification "Snooze" button.
 const snoozeActionId = 'snooze';
 
+/// Action id of the notification "Mark completed" button.
+const markDoneActionId = 'mark-done';
+
 /// Default snooze duration; user-configurable via AppSettings.snoozeMinutes.
 const defaultSnoozeMinutes = 10;
 
@@ -34,6 +37,11 @@ abstract interface class ReminderScheduler {
   /// Fires a notification immediately, so the user can verify notifications
   /// work on this device without waiting for a reminder time.
   Future<void> showNow({required String title, required String body});
+
+  /// Invoked when the user taps a reminder's "Mark completed" action while
+  /// the app process is running. Set by the app shell to write today's
+  /// daily log (the background-isolate path writes to Firestore directly).
+  set onMarkCompleted(Future<void> Function(String taskId)? handler);
 }
 
 /// Parses `"HH:mm"` → (hour, minute).
@@ -63,18 +71,25 @@ DateTime nextOccurrence(DateTime now, int hour, int minute) {
   return candidate;
 }
 
-/// Notification payload carried by a reminder so its Snooze action knows
-/// what to re-show and how long to wait — including in the Android
-/// background isolate, where only the payload string is available.
-String encodeSnoozePayload({
+/// Notification payload carried by a reminder so its actions know what task
+/// it belongs to, what to re-show on Snooze and how long to wait — including
+/// in the Android background isolate, where only the payload string is
+/// available.
+String encodeReminderPayload({
   required String title,
   required String body,
   required int minutes,
+  required String taskId,
 }) =>
-    jsonEncode({'title': title, 'body': body, 'minutes': minutes});
+    jsonEncode({
+      'title': title,
+      'body': body,
+      'minutes': minutes,
+      'taskId': taskId,
+    });
 
-({String title, String body, int minutes})? decodeSnoozePayload(
-    String? payload) {
+({String title, String body, int minutes, String taskId})?
+    decodeReminderPayload(String? payload) {
   if (payload == null || payload.isEmpty) return null;
   try {
     final map = jsonDecode(payload) as Map<String, dynamic>;
@@ -82,6 +97,7 @@ String encodeSnoozePayload({
       title: map['title'] as String,
       body: map['body'] as String,
       minutes: map['minutes'] as int,
+      taskId: map['taskId'] as String,
     );
   } catch (_) {
     return null;

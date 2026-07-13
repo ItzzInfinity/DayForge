@@ -21,22 +21,26 @@ void main() {
     });
   });
 
-  group('snooze payload', () {
-    test('round-trips title, body and minutes', () {
-      final encoded = encodeSnoozePayload(
-          title: 'Advanced To-Do', body: 'Tick "Read" today.', minutes: 15);
-      final decoded = decodeSnoozePayload(encoded);
+  group('reminder payload', () {
+    test('round-trips title, body, minutes and taskId', () {
+      final encoded = encodeReminderPayload(
+          title: 'Advanced To-Do',
+          body: 'Tick "Read" today.',
+          minutes: 15,
+          taskId: 't1');
+      final decoded = decodeReminderPayload(encoded);
       expect(decoded, isNotNull);
       expect(decoded!.title, 'Advanced To-Do');
       expect(decoded.body, 'Tick "Read" today.');
       expect(decoded.minutes, 15);
+      expect(decoded.taskId, 't1');
     });
 
     test('rejects null, empty and malformed payloads', () {
-      expect(decodeSnoozePayload(null), isNull);
-      expect(decodeSnoozePayload(''), isNull);
-      expect(decodeSnoozePayload('not json'), isNull);
-      expect(decodeSnoozePayload('{"title":"x"}'), isNull);
+      expect(decodeReminderPayload(null), isNull);
+      expect(decodeReminderPayload(''), isNull);
+      expect(decodeReminderPayload('not json'), isNull);
+      expect(decodeReminderPayload('{"title":"x"}'), isNull);
     });
   });
 

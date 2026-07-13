@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:advanced_todo/features/auth/domain/app_user.dart';
 import 'package:advanced_todo/features/auth/domain/auth_repository.dart';
 import 'package:advanced_todo/features/export/data/export_saver.dart';
+import 'package:advanced_todo/features/onboarding/data/tutorial_store.dart';
 import 'package:advanced_todo/features/tasks/domain/task.dart';
 import 'package:advanced_todo/services/firestore/firestore_gateway.dart';
 import 'package:advanced_todo/services/notifications/reminder_scheduler.dart';
@@ -49,6 +50,11 @@ class FakeReminderScheduler implements ReminderScheduler {
   final shownNow = <String>[];
   int permissionRequests = 0;
 
+  /// Captured so tests can simulate the notification's "Mark completed"
+  /// action being tapped while the app runs.
+  @override
+  Future<void> Function(String taskId)? onMarkCompleted;
+
   @override
   Future<bool> requestPermission() async {
     permissionRequests++;
@@ -91,6 +97,20 @@ class FakeExportSaver implements ExportSaver {
     if (destination != null) saved.add((fileName: fileName, content: content));
     return destination;
   }
+}
+
+/// In-memory tutorial flag; defaults to "already seen" so the first-run
+/// overlay stays out of tests that aren't about it.
+class FakeTutorialStore implements TutorialStore {
+  FakeTutorialStore({this.seen = true});
+
+  bool seen;
+
+  @override
+  Future<bool> isSeen() async => seen;
+
+  @override
+  Future<void> markSeen() async => seen = true;
 }
 
 /// In-memory FirestoreGateway so tests never touch the network.

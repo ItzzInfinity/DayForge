@@ -13,11 +13,20 @@ import '../../tasks/providers.dart';
 import '../domain/daily_log.dart';
 import '../providers.dart';
 
-class TodayScreen extends ConsumerWidget {
+class TodayScreen extends ConsumerStatefulWidget {
   const TodayScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TodayScreen> createState() => _TodayScreenState();
+}
+
+class _TodayScreenState extends ConsumerState<TodayScreen> {
+  /// Completed tasks stay hidden behind the `^` toggle so the screen is
+  /// about what's left (or the celebration once everything is done).
+  bool _showCompleted = false;
+
+  @override
+  Widget build(BuildContext context) {
     final date = ref.watch(currentDateProvider);
     final dateKey = toDateKey(date);
     final tasksAsync = ref.watch(tasksProvider);
@@ -59,24 +68,54 @@ class TodayScreen extends ConsumerWidget {
           ];
           final allDone = pending.isEmpty &&
               logs.values.every((log) => log.hasValue);
+
+          final completedSection = <Widget>[
+            if (completed.isNotEmpty)
+              _CompletedHeader(
+                count: completed.length,
+                expanded: _showCompleted,
+                onToggle: () =>
+                    setState(() => _showCompleted = !_showCompleted),
+              ),
+            if (_showCompleted)
+              for (final task in completed)
+                _TodayCard(task: task, dateKey: dateKey),
+          ];
+
+          if (allDone) {
+            // Everything ticked: celebrate front and centre; the completed
+            // cards stay tucked behind the toggle.
+            if (!_showCompleted) {
+              return Column(
+                children: [
+                  const _DailyQuoteCard(),
+                  const Expanded(
+                    child: Center(
+                      child: SingleChildScrollView(child: _AllDoneBanner()),
+                    ),
+                  ),
+                  ...completedSection,
+                  const SizedBox(height: 8),
+                ],
+              );
+            }
+            return ListView(
+              padding: const EdgeInsets.all(8),
+              children: [
+                const _DailyQuoteCard(),
+                const _AllDoneBanner(),
+                ...completedSection,
+              ],
+            );
+          }
+
           return ListView(
             padding: const EdgeInsets.all(8),
             children: [
               const _DailyQuoteCard(),
-              if (allDone) const _AllDoneBanner(),
               for (final task in pending)
                 _TodayCard(task: task, dateKey: dateKey),
-              if (completed.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                  child: Text(
-                    'Completed today',
-                    key: const Key('completed-header'),
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
-                ),
-              for (final task in completed)
-                _TodayCard(task: task, dateKey: dateKey),
+              ...completedSection,
             ],
           );
         },
@@ -174,6 +213,45 @@ class _DailyQuoteCard extends ConsumerWidget {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// Collapsible "Completed today (N)" row. Collapsed it shows `^` — tapping
+/// reveals the ticked tasks; tapping again hides them.
+class _CompletedHeader extends StatelessWidget {
+  const _CompletedHeader({
+    required this.count,
+    required this.expanded,
+    required this.onToggle,
+  });
+
+  final int count;
+  final bool expanded;
+  final VoidCallback onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      key: const Key('completed-toggle'),
+      onTap: onToggle,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+        child: Row(
+          children: [
+            Text(
+              'Completed today ($count)',
+              key: const Key('completed-header'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            const Spacer(),
+            Icon(
+              expanded ? Icons.keyboard_arrow_down : Icons.keyboard_arrow_up,
+              size: 20,
+            ),
+          ],
+        ),
       ),
     );
   }

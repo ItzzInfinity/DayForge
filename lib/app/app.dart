@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/providers.dart';
+import '../core/utils/date_utils.dart';
 import '../core/widgets/error_retry.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/providers.dart';
+import '../features/daily/providers.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../features/settings/providers.dart';
 import '../features/tasks/providers.dart';
@@ -73,6 +75,16 @@ class AuthGate extends ConsumerWidget {
 
     ref.listen(tasksProvider, onChange);
     ref.listen(appSettingsProvider, onChange);
+    // Notification "Mark completed" while the app runs: write today's log
+    // through the normal repository so every open screen refreshes.
+    ref.read(reminderSchedulerProvider).onMarkCompleted = (taskId) async {
+      final repo = ref.read(dailyLogRepositoryProvider);
+      if (repo == null) return;
+      final dateKey = toDateKey(ref.read(currentDateProvider));
+      await repo.setCompleted(taskId, dateKey, completed: true);
+      ref.invalidate(todayLogProvider(taskId));
+      ref.invalidate(taskLogsProvider(taskId));
+    };
     final authState = ref.watch(authStateProvider);
     return authState.when(
       data: (user) =>
