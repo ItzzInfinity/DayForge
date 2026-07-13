@@ -125,3 +125,19 @@ class FakeFirestoreGateway implements FirestoreGateway {
   Stream<List<DocRecord>> watchCollection(String path) =>
       Stream.fromFuture(getCollection(path));
 }
+
+/// Gateway whose collection reads can be switched to fail — drives the
+/// error/retry states. Only list reads fail so sign-in (a doc write) and
+/// settings (a doc read) keep working around the failure.
+class FlakyFirestoreGateway extends FakeFirestoreGateway {
+  bool failCollectionReads = false;
+
+  @override
+  Future<List<DocRecord>> getCollection(String path) async {
+    if (failCollectionReads) {
+      throw const FirestoreGatewayException('Backend unavailable',
+          statusCode: 503);
+    }
+    return super.getCollection(path);
+  }
+}

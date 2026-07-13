@@ -2,11 +2,27 @@
 
 > Resume protocol: read this file first, continue from **Next step**, do not redo completed work, always run the self-check after each task.
 
-## Current state — 2026-07-13 (session 8) — Phase 5 in progress
+## Current state — 2026-07-13 (session 8) — PHASES 5 & 6 COMPLETE
 
-- **Current phase:** Phase 5 — Reliability
-- **Last completed task:** Export to JSON/CSV/Markdown
-- **Next task:** Phase 5 — offline/conflict review + error/retry states (see Next step)
+- **Current phase:** All FSD phases done — final acceptance sweep next
+- **Last completed task:** Phase 6 polish (onboarding, help text, desktop/mobile layout)
+- **Next task:** FSD acceptance-criteria sweep + final manual verification checklist (see Next step)
+
+### Phase 6 polish summary (2026-07-13, session 8)
+- `lib/core/widgets/content_width.dart` — `ContentWidth` (Align topCenter + maxWidth 840) wraps the bodies of Today/Tasks/Progress/Settings/TaskDetail; add-task form already capped at 560.
+- Today first-run onboarding: `_OnboardingEmpty` when the user has zero tasks — "Build a habit in three steps" + numbered steps + FilledButton key `onboarding-add-task` pushing AddTaskScreen. Distinct second empty state when tasks exist but none are active today ("Nothing scheduled for today…").
+- Remark help text: hint is now "Optional note for today (how did it go?)".
+- Also caught: TaskDetailScreen error path was still a raw string → now ErrorRetry (invalidates taskLogsProvider).
+- Mobile layout verified at 400px (existing tests); no changes needed.
+- Tests: +3 (onboarding flow incl. creating first task; distinct none-active-today empty state; 1600px width cap ≤840 on the list). **80 total passing.**
+- Validation: analyze clean, 80 tests, Linux release rebuilt (Dart-only).
+
+### Error/retry + offline review summary (2026-07-13, session 8)
+- `lib/core/widgets/error_retry.dart` — `friendlyError(Object)`: SocketException/ClientException → "No connection…", FirestoreGatewayException 401 → re-sign-in, 403 → no access, other gateway errors → bare message, else toString. `ErrorRetry` widget: icon + message + friendly detail + Retry button (key `retry`).
+- Wired into: AuthGate session error (invalidates authStateProvider), Today/Tasks/Progress list errors (invalidate tasksProvider), Today per-card log error (IconButton key `retry-log-{taskId}` → todayLogProvider), Progress per-card history error (key `retry-logs-{taskId}` → taskLogsProvider).
+- `docs/architecture.md` — "Offline & conflict strategy" section rewritten: native = persistence on (offline-first ✓); Linux REST = online-only accepted limitation (friendly errors + idempotent date-key merge writes make retries safe); conflicts bounded by per-field merges + LWW + derived-stats-never-stored.
+- Tests: +4 (3 friendlyError unit in `test/error_retry_test.dart`; 1 widget: `FlakyFirestoreGateway` in fakes — collection reads throw 503 until flag cleared → Today shows friendly retry, tap recovers). **77 total passing.** (Finders skip offstage IndexedStack tabs by default, so the duplicate ErrorRetry on hidden tabs doesn't break `findsOneWidget`.)
+- Validation: analyze clean, 77 tests, Linux release rebuilt (Dart-only).
 
 ### Export summary (2026-07-13, session 8)
 - Deps added: `file_selector`, `share_plus 13.2.0` (v13 API: `SharePlus.instance.share(ShareParams(...))`), `path_provider` — native plugins, so BOTH builds re-verified (Linux release + debug APK; APK pulled Android SDK Platform 35 automatically).
@@ -113,12 +129,12 @@ Tests: 9 passing (`test/widget_test.dart` — auth flow, profile doc, navigation
 ### Blocked
 - Nothing. Manual items M1–M5 all complete; no new manual items open.
 
-### Next step (exact) — Phase 5 remaining
+### Next step (exact) — final acceptance sweep
 1. `export PATH="$HOME/development/flutter/bin:$PATH"`
-2. Offline/conflict review: document in `docs/architecture.md` — native gateway has Firestore persistence (offline-first ✓) and merge writes bound conflicts (per-field last-write-wins; checkbox and remark never clobber each other); REST/Linux gateway is online-only → decide: accept + surface a clear offline error, or add a lightweight read cache. At minimum make REST failures user-legible.
-3. Error/retry states: screens have error text but no retry — add a shared retry widget (message + Retry button that invalidates the failed provider) to Today/Tasks/Progress error paths; widget test with a throwing gateway.
-4. Backup/restore: backup = JSON export (formatVersion 1) — done; import/restore is optional, skip unless user asks.
-5. Validate: analyze + test + linux build (+apk if deps added).
+2. Re-read FSD.md acceptance criteria one by one; map each to the implementing code/test; fix any gap found (none known).
+3. Rebuild release artifacts (linux release + apk release or debug per user preference) and write a final manual verification checklist as a new manual task (M8) in `manual-task.md`: fresh sign-up flow, add task, tick+remark, cross-device sync phone↔desktop, reminder fire, export, theme, offline behavior on phone.
+4. Update roadmap Phase 0 leftover (`docs/requirements.md` "expand when needed") — either write the short PRD or mark explicitly skipped as FSD covers it.
+5. Optional leftovers if the user asks: JSON import/restore, FCM push, snooze.
 
 ### Assumptions
 - Sign-out moved from Today appbar to Settings (better daily UX; Today stays minimal).

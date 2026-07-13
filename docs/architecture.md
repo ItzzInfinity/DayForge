@@ -45,5 +45,29 @@ Tasks are stored once with `startDate` + `durationDays`. Daily entries are **not
 - Primary: local scheduled notifications per device (works offline, survives restarts via boot-time rescheduling on Android; on desktop, re-scheduled at app launch).
 - Optional later: FCM for sync-related nudges. No server functions required for MVP.
 
-## Offline strategy
-Firestore persistence enabled on all platforms. App is fully usable offline; sync happens automatically when back online.
+## Offline & conflict strategy (reviewed 2026-07-13, Phase 5)
+
+**Android / Windows (native SDK):** Firestore offline persistence is enabled
+(`firebase_bootstrap.dart`). Reads serve from the local cache; writes queue and
+sync automatically when back online. The app is fully usable offline.
+
+**Linux (REST gateway): online-only — accepted limitation.** The REST gateway
+has no local cache or write queue; a lost connection surfaces as a
+SocketException/ClientException. Mitigations in place instead of a cache:
+- Every failed load shows a friendly message ("No connection…") with a Retry
+  button (`lib/core/widgets/error_retry.dart`), never a raw exception dump.
+- Daily-log writes are idempotent (doc id = date key, merge writes), so
+  retrying a tick/remark after reconnecting can never duplicate or corrupt data.
+- A lightweight read cache could be added later if Linux offline use becomes a
+  real need; not justified for the MVP.
+
+**Multi-device conflicts:** bounded by design rather than resolved at runtime:
+- All writes are per-field **merge** writes; the checkbox (`completed`/
+  `completedAt`) and the remark are written as separate field sets, so ticking
+  on the phone and typing a remark on the desktop never clobber each other,
+  even for the same day.
+- Within a single field, Firestore applies last-write-wins. Documents are tiny
+  and per-day/per-task, so a genuine same-field race (two devices editing the
+  same remark at the same moment) loses at most one short edit — acceptable.
+- Derived data (streaks, completion %) is computed client-side from logs and
+  never stored, so it cannot conflict or go stale.

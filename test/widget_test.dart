@@ -537,6 +537,108 @@ void main() {
     });
   });
 
+  group('Onboarding and layout polish', () {
+    testWidgets(
+        'first run: Today explains the loop and its button adds a task',
+        (tester) async {
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Build a habit in three steps'), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('onboarding-add-task')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('task-title')), 'Stretch');
+      await tester.tap(find.byKey(const Key('task-submit')));
+      await tester.pumpAndSettle();
+
+      // Back on Today: the new task is active immediately, onboarding gone.
+      expect(find.text('Stretch'), findsOneWidget);
+      expect(find.text('Build a habit in three steps'), findsNothing);
+    });
+
+    testWidgets('tasks with none active today get a distinct empty state',
+        (tester) async {
+      final gateway = FakeFirestoreGateway();
+      gateway.docs['users/u/tasks/t1'] = {
+        'title': 'Future task',
+        'startDate': '2026-08-01',
+        'durationDays': 7,
+        'status': 'active',
+        'createdAt': DateTime.utc(2026, 7, 1),
+        'updatedAt': DateTime.utc(2026, 7, 1),
+      };
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo, gateway: gateway));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Nothing scheduled for today'),
+          findsOneWidget);
+      expect(find.text('Build a habit in three steps'), findsNothing);
+    });
+
+    testWidgets('desktop width: list content is capped, not edge-to-edge',
+        (tester) async {
+      tester.view.physicalSize = const Size(1600, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final gateway = FakeFirestoreGateway();
+      gateway.docs['users/u/tasks/t1'] = {
+        'title': 'Meditate',
+        'startDate': '2026-07-13',
+        'durationDays': 7,
+        'status': 'active',
+        'createdAt': DateTime.utc(2026, 7, 1),
+        'updatedAt': DateTime.utc(2026, 7, 1),
+      };
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo, gateway: gateway));
+      await tester.pumpAndSettle();
+
+      final listWidth = tester.getSize(find.byType(ListView).first).width;
+      expect(listWidth, lessThanOrEqualTo(840));
+    });
+  });
+
+  group('Error and retry', () {
+    testWidgets('failed task load shows a friendly retry that recovers',
+        (tester) async {
+      final gateway = FlakyFirestoreGateway();
+      gateway.docs['users/u/tasks/t1'] = {
+        'title': 'Meditate',
+        'startDate': '2026-07-13',
+        'durationDays': 7,
+        'status': 'active',
+        'createdAt': DateTime.utc(2026, 7, 1),
+        'updatedAt': DateTime.utc(2026, 7, 1),
+      };
+      gateway.failCollectionReads = true;
+
+      final repo = FakeAuthRepository(
+          initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+      await tester.pumpWidget(appWith(repo, gateway: gateway));
+      await tester.pumpAndSettle();
+
+      // Today (first tab) uses the failing tasksProvider.
+      expect(find.text('Could not load your tasks.'), findsOneWidget);
+      // Friendly message, not the exception's toString.
+      expect(find.text('Backend unavailable'), findsOneWidget);
+      expect(find.textContaining('FirestoreGatewayException'), findsNothing);
+
+      gateway.failCollectionReads = false;
+      await tester.tap(find.byKey(const Key('retry')));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Meditate'), findsOneWidget);
+      expect(find.byKey(const Key('retry')), findsNothing);
+    });
+  });
+
   group('Export data', () {
     late FakeFirestoreGateway gateway;
     late FakeExportSaver saver;

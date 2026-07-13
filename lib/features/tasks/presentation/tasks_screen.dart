@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/content_width.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../../progress/presentation/task_detail_screen.dart';
 import '../domain/task.dart';
 import '../providers.dart';
@@ -44,7 +46,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
         ),
         child: const Icon(Icons.add),
       ),
-      body: tasksAsync.when(
+      body: ContentWidth(
+          child: tasksAsync.when(
         data: (tasks) {
           if (tasks.isEmpty) {
             return const Center(
@@ -132,9 +135,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) =>
-            Center(child: Text('Could not load tasks: $error')),
-      ),
+        error: (error, _) => ErrorRetry(
+          message: 'Could not load your tasks.',
+          error: error,
+          onRetry: () => ref.invalidate(tasksProvider),
+        ),
+      )),
     );
   }
 }

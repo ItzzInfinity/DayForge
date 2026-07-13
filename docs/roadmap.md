@@ -52,16 +52,20 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[M]` waiting on man
 **Phase 4 complete ✔ (2026-07-13)**
 
 ## Phase 5 — Reliability
-- [ ] Offline-first behavior
-- [ ] Multi-device conflict handling
+- [x] Offline-first behavior — done 2026-07-13; native platforms use Firestore persistence (already on); Linux REST gateway documented as online-only accepted limitation with friendly offline errors + idempotent retryable writes (docs/architecture.md)
+- [x] Multi-device conflict handling — done 2026-07-13; bounded by design: per-field merge writes (tick and remark never clobber each other), last-write-wins within a field, derived stats never stored; documented in docs/architecture.md
 - [x] Export to JSON/CSV/Markdown — done 2026-07-13; pure serializers + Settings "Export data" tile; desktop save-as dialog (file_selector), Android share sheet (share_plus)
 - [~] Backup/restore flow — backup covered by JSON export (formatVersion 1); import/restore optional, not started
-- [ ] Error handling and retry states
+- [x] Error handling and retry states — done 2026-07-13; shared ErrorRetry widget (friendly messages incl. offline/expired-session) + Retry on session/Today/Tasks/Progress loads and inline retry on per-card log loads
+
+**Phase 5 complete ✔ (2026-07-13)** — import/restore remains optional
 
 ## Phase 6 — Polish
-- [ ] Dark mode
-- [ ] Empty states
-- [ ] Desktop layout
-- [ ] Mobile layout
-- [ ] Onboarding
-- [ ] Help text for daily logging
+- [x] Dark mode — done earlier (settings theme toggle: system/light/dark, persisted)
+- [x] Empty states — done; all list screens, incl. distinct Today states (no tasks at all vs none active today)
+- [x] Desktop layout — done 2026-07-13; shared `ContentWidth` caps list/form content at 840px (add-task form already 560px); nav rail ≥640px
+- [x] Mobile layout — done 2026-07-13; verified at 400px (bottom bar, FAB clearance, tap targets); no changes needed
+- [x] Onboarding — done 2026-07-13; first-run Today explains the 3-step loop with an "Add your first task" button
+- [x] Help text for daily logging — done 2026-07-13; remark hint now "Optional note for today (how did it go?)"
+
+**Phase 6 complete ✔ (2026-07-13)**

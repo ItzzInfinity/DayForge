@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
+import '../../../core/widgets/content_width.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../../daily/providers.dart';
 import '../../tasks/domain/task.dart';
 import '../../tasks/providers.dart';
@@ -16,7 +18,8 @@ class ProgressScreen extends ConsumerWidget {
     final tasksAsync = ref.watch(tasksProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Progress')),
-      body: tasksAsync.when(
+      body: ContentWidth(
+          child: tasksAsync.when(
         data: (tasks) {
           final tracked = [
             for (final task in tasks)
@@ -38,9 +41,12 @@ class ProgressScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) =>
-            Center(child: Text('Could not load tasks: $error')),
-      ),
+        error: (error, _) => ErrorRetry(
+          message: 'Could not load your tasks.',
+          error: error,
+          onRetry: () => ref.invalidate(tasksProvider),
+        ),
+      )),
     );
   }
 }
@@ -126,7 +132,20 @@ class _ProgressCard extends ConsumerWidget {
               ),
             ),
           ),
-          error: (error, _) => Text('Could not load logs: $error'),
+          error: (error, _) => Row(
+            children: [
+              Expanded(
+                child: Text('Could not load history. '
+                    '${friendlyError(error)}'),
+              ),
+              IconButton(
+                key: ValueKey('retry-logs-${task.id}'),
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Retry',
+                onPressed: () => ref.invalidate(taskLogsProvider(task.id)),
+              ),
+            ],
+          ),
           ),
         ),
       ),

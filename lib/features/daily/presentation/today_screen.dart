@@ -3,7 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../../core/widgets/content_width.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../../tasks/domain/task.dart';
+import '../../tasks/presentation/add_task_screen.dart';
 import '../../tasks/providers.dart';
 import '../domain/daily_log.dart';
 import '../providers.dart';
@@ -19,8 +22,10 @@ class TodayScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: Text('Today · $dateKey')),
-      body: tasksAsync.when(
+      body: ContentWidth(
+          child: tasksAsync.when(
         data: (tasks) {
+          if (tasks.isEmpty) return const _OnboardingEmpty();
           final active = [
             for (final task in tasks)
               if (task.isActiveOn(date)) task
@@ -28,7 +33,9 @@ class TodayScreen extends ConsumerWidget {
           if (active.isEmpty) {
             return const Center(
               child: Text(
-                'Nothing scheduled for today.\nAdd a task from the Tasks tab.',
+                'Nothing scheduled for today.\n'
+                'Your tasks have ended, start later, or are paused — '
+                'see the Tasks tab.',
                 textAlign: TextAlign.center,
               ),
             );
@@ -42,8 +49,60 @@ class TodayScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) =>
-            Center(child: Text('Could not load tasks: $error')),
+        error: (error, _) => ErrorRetry(
+          message: 'Could not load your tasks.',
+          error: error,
+          onRetry: () => ref.invalidate(tasksProvider),
+        ),
+      )),
+    );
+  }
+}
+
+/// First-run experience: a brand-new account lands here, so this is where
+/// the core loop gets explained.
+class _OnboardingEmpty extends StatelessWidget {
+  const _OnboardingEmpty();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.flag_outlined,
+                size: 48, color: theme.colorScheme.primary),
+            const SizedBox(height: 16),
+            Text('Build a habit in three steps',
+                style: theme.textTheme.titleLarge,
+                textAlign: TextAlign.center),
+            const SizedBox(height: 16),
+            for (final step in const [
+              '1.  Add a task and choose how many days it should run.',
+              '2.  Tick it off here every day — with an optional note.',
+              '3.  Watch your streak grow on the Progress tab.',
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(step,
+                    style: theme.textTheme.bodyMedium,
+                    textAlign: TextAlign.center),
+              ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              key: const Key('onboarding-add-task'),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                    builder: (_) => const AddTaskScreen()),
+              ),
+              icon: const Icon(Icons.add),
+              label: const Text('Add your first task'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -78,7 +137,14 @@ class _TodayCard extends ConsumerWidget {
         ),
         error: (error, _) => ListTile(
           title: Text(task.title),
-          subtitle: Text('Could not load today\'s log: $error'),
+          subtitle: Text(
+              'Could not load today\'s entry. ${friendlyError(error)}'),
+          trailing: IconButton(
+            key: ValueKey('retry-log-${task.id}'),
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Retry',
+            onPressed: () => ref.invalidate(todayLogProvider(task.id)),
+          ),
         ),
       ),
     );
@@ -181,7 +247,7 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
               key: ValueKey('remark-${widget.task.id}'),
               controller: _remark,
               decoration: const InputDecoration(
-                hintText: 'Add a remark for today…',
+                hintText: 'Optional note for today (how did it go?)',
                 isDense: true,
                 border: UnderlineInputBorder(),
               ),

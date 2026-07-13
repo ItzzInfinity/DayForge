@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
 import '../../../core/utils/date_utils.dart';
+import '../../../core/widgets/content_width.dart';
+import '../../../core/widgets/error_retry.dart';
 import '../../daily/domain/daily_log.dart';
 import '../../daily/providers.dart';
 import '../../tasks/domain/task.dart';
@@ -21,12 +23,16 @@ class TaskDetailScreen extends ConsumerWidget {
     final today = ref.watch(currentDateProvider);
     return Scaffold(
       appBar: AppBar(title: Text(task.title)),
-      body: logsAsync.when(
+      body: ContentWidth(
+          child: logsAsync.when(
         data: (logs) => _DetailBody(task: task, logs: logs, today: today),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, _) =>
-            Center(child: Text('Could not load history: $error')),
-      ),
+        error: (error, _) => ErrorRetry(
+          message: 'Could not load this task\'s history.',
+          error: error,
+          onRetry: () => ref.invalidate(taskLogsProvider(task.id)),
+        ),
+      )),
     );
   }
 }

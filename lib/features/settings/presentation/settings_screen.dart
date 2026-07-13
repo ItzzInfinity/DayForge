@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
+import '../../../core/widgets/content_width.dart';
 import '../../../services/notifications/providers.dart';
 import '../../../services/notifications/reminder_scheduler.dart';
 import '../../auth/providers.dart';
@@ -138,7 +139,8 @@ class SettingsScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
-      body: ListView(
+      body: ContentWidth(
+          child: ListView(
         children: [
           ListTile(
             leading: const Icon(Icons.account_circle),
@@ -224,7 +226,7 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => ref.read(authRepositoryProvider).signOut(),
           ),
         ],
-      ),
+      )),
     );
   }
 }

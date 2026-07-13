@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/providers.dart';
+import '../core/widgets/error_retry.dart';
 import '../features/auth/presentation/sign_in_screen.dart';
 import '../features/auth/providers.dart';
 import '../features/settings/domain/app_settings.dart';
@@ -78,11 +79,10 @@ class AuthGate extends ConsumerWidget {
       loading: () =>
           const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (error, _) => Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text('Could not load your session: $error'),
-          ),
+        body: ErrorRetry(
+          message: 'Could not load your session.',
+          error: error,
+          onRetry: () => ref.invalidate(authStateProvider),
         ),
       ),
     );
