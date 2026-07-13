@@ -89,8 +89,7 @@ void main() {
 
     await tester.tap(find.text('Progress'));
     await tester.pumpAndSettle();
-    expect(find.text('Streaks, history and charts arrive in Phase 4.'),
-        findsOneWidget);
+    expect(find.textContaining('No tasks to track yet'), findsOneWidget);
 
     await tester.tap(find.text('Today'));
     await tester.pumpAndSettle();
@@ -344,6 +343,36 @@ void main() {
 
       final log = gateway.docs['users/u/tasks/t1/daily_logs/2026-07-13'];
       expect(log!['remark'], 'went well');
+    });
+
+    testWidgets('Progress tab shows streak and completion for a task',
+        (tester) async {
+      // 2 completed days ending today, 1 elapsed day missed (Jul 11).
+      gateway.docs['users/u/tasks/t1/daily_logs/2026-07-12'] = {
+        'date': '2026-07-12',
+        'completed': true,
+        'updatedAt': DateTime.utc(2026, 7, 12),
+      };
+      gateway.docs['users/u/tasks/t1/daily_logs/2026-07-13'] = {
+        'date': '2026-07-13',
+        'completed': true,
+        'updatedAt': DateTime.utc(2026, 7, 13),
+      };
+      await pumpSignedIn(tester);
+
+      await tester.tap(find.text('Progress'));
+      await tester.pumpAndSettle();
+
+      // Task started 2026-07-13 (day 1), so elapsed=1... this task starts
+      // today per seedTask; streak counts both ticked days.
+      expect(find.byKey(const ValueKey('streak-t1')), findsOneWidget);
+      expect(find.text('2 days'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('completion-t1')),
+        findsOneWidget,
+      );
+      // Future task appears too (not archived), showing its start date.
+      expect(find.text('Starts 2026-08-01'), findsOneWidget);
     });
 
     testWidgets('existing log state is shown on load', (tester) async {

@@ -23,3 +23,12 @@ final todayLogProvider =
   final dateKey = toDateKey(ref.watch(currentDateProvider));
   return repo.get(taskId, dateKey);
 });
+
+/// Every log of one task (streaks, history). Invalidated together with
+/// [todayLogProvider] after each write on the Today screen.
+final taskLogsProvider =
+    FutureProvider.family<List<DailyLog>, String>((ref, taskId) async {
+  final repo = ref.watch(dailyLogRepositoryProvider);
+  if (repo == null) return const [];
+  return repo.getAllForTask(taskId);
+});

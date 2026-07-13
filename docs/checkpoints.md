@@ -4,9 +4,16 @@
 
 ## Current state — 2026-07-13 (session 5) — Phase 3: local notifications COMPLETE
 
-- **Current phase:** Phase 4 — Progress tracking (starting); Phase 3 core done (FCM/snooze deferred as optional)
-- **Last completed task:** Settings doc + preferences (notifications, default time, default duration, theme)
-- **Next task:** Phase 4 — streak calculation + completion percentage (provider + Progress screen)
+- **Current phase:** Phase 4 — Progress tracking
+- **Last completed task:** Streaks + completion % + Progress screen
+- **Next task:** Task history timeline + calendar view (per-task detail screen)
+
+### Streaks/completion summary (2026-07-13, session 6)
+- `lib/features/progress/domain/progress_calculator.dart` — pure `calculateProgress(task, logs, today)` → `TaskProgress{currentStreak, completedDays, elapsedDays, completionPercent}`. Semantics: streak = consecutive completed days ending today OR yesterday (unticked today doesn't zero it mid-day); elapsed = startDate..min(today, endDate) inclusive, 0 for future tasks; % = completed/elapsed.
+- `taskLogsProvider` family added in `lib/features/daily/providers.dart` (getAllForTask); Today screen invalidates it alongside `todayLogProvider` on tick/remark writes.
+- Progress screen rebuilt: per non-archived task a card with 🔥 streak chip (key `streak-{id}`), date range, LinearProgressIndicator, "X of Y days done · Z%" (key `completion-{id}`), "Starts <date>" for future tasks.
+- Tests: +10 (9 calculator edge cases — incl. remark-only days don't count, ended task caps window — and 1 Progress-tab widget test). 56 total passing. (Lesson: gap test initially asserted wrong semantics — streak ending yesterday survives.)
+- Validation: analyze clean, 56 tests pass, Linux release rebuilt (Dart-only).
 
 ### Settings summary (2026-07-13, session 6)
 - M6+M7 fully verified by user: reminders fired simultaneously on Android phone and Ubuntu ✓.
@@ -84,12 +91,11 @@ Tests: 9 passing (`test/widget_test.dart` — auth flow, profile doc, navigation
 ### Blocked
 - Nothing. Manual items M1–M5 all complete; no new manual items open.
 
-### Next step (exact) — Phase 4 start
+### Next step (exact)
 1. `export PATH="$HOME/development/flutter/bin:$PATH"`
-2. Streaks + completion %: pure functions in `lib/features/progress/domain/progress_calculator.dart` — `currentStreak(logs, today)` (consecutive completed days ending today-or-yesterday), `completionPercent(task, logs, today)` (completed ÷ elapsed active days, clamp for future start dates); unit-test edge cases (gaps, task started today, ended tasks).
-3. Provider: per-task progress from `DailyLogRepository.getAllForTask` (invalidate alongside todayLogProvider writes — consider a shared invalidation or watch); Progress screen: list each task with streak 🔥, completion bar (LinearProgressIndicator), maybe overall summary card. fl_chart can wait until history timeline/calendar.
-4. Also show streak on Today card subtitle if cheap.
-5. Validate: analyze + test + linux build.
+2. Task history timeline + calendar view: task detail screen (tap a card on Progress or Tasks) showing a month calendar grid where each day in the task's range is colored (completed / missed / future / today) with the remark shown on tap, plus a simple chronological list of logged days with remarks underneath. Pure date-grid helper + unit tests; reuse `taskLogsProvider`. No new deps needed (hand-rolled grid; fl_chart still optional later).
+3. Then: task filtering by category/status + search (Tasks tab), archive/delete actions on task tiles.
+4. Validate: analyze + test + linux build.
 
 ### Assumptions
 - Sign-out moved from Today appbar to Settings (better daily UX; Today stays minimal).

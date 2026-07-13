@@ -42,8 +42,8 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[M]` waiting on man
 **Phase 3 core complete ✔ (2026-07-13)** — remaining items optional
 
 ## Phase 4 — Progress tracking
-- [ ] Streak calculation
-- [ ] Completion percentage
+- [x] Streak calculation — done 2026-07-13; pure `calculateProgress` (streak ends today-or-yesterday; gaps break it), 9 unit tests
+- [x] Completion percentage — done 2026-07-13; completed ÷ elapsed active days, capped at task end; Progress screen with 🔥 streak chip + progress bar per task
 - [ ] Task history timeline
 - [ ] Calendar view
 - [ ] Filtering by category/status

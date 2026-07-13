@@ -127,6 +127,7 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
       await repo.setCompleted(widget.task.id, widget.dateKey,
           completed: value);
       ref.invalidate(todayLogProvider(widget.task.id));
+      ref.invalidate(taskLogsProvider(widget.task.id));
     } catch (_) {
       if (!mounted) return;
       setState(() => _completed = !value);
@@ -145,6 +146,7 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
       await repo.setRemark(widget.task.id, widget.dateKey, text);
       _savedRemark = text;
       ref.invalidate(todayLogProvider(widget.task.id));
+      ref.invalidate(taskLogsProvider(widget.task.id));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
