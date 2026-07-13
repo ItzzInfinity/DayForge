@@ -71,6 +71,17 @@ Covers what M6/M7 didn't. Run the Linux app and have your phone nearby:
 
 When these pass, every FSD acceptance criterion is user-verified. Anything that fails: note what you saw and Claude Code will fix it.
 
+### M9 — Verify feedback-round-1 features (2026-07-13)
+Fresh artifacts: Linux `./build/linux/x64/release/bundle/advanced_todo`, Android `build/app/outputs/flutter-apk/app-release.apk` (58 MB — install over the previous release APK; same signature, no uninstall needed).
+
+- [ ] 1. **Calendar readability (both devices):** open any task's detail — day numbers in the circles should now be clearly readable, and on Linux the calendar shouldn't stretch into giant circles.
+- [ ] 2. **Archive flow:** Tasks tab → archive a task from its menu — it vanishes from the list (a snackbar points to Settings). Settings → Archived tasks → restore it (back to Active) or delete it. The Archived filter chip is gone from the Tasks tab.
+- [ ] 3. **Filter double-tap:** Tasks tab → tap "Active" (already selected) — filter resets to All. Same for Completed.
+- [ ] 4. **Completed-to-bottom + congrats:** with 2+ tasks active today, tick one — it moves under "Completed today". Tick all — a 🎉 "All done for today!" banner pops in.
+- [ ] 5. **Quotes:** Today shows a quote under the app bar (online: with "· zenquotes.io"; offline: from the bundled list — should still appear). Tick a task — a quote snackbar appears. Tomorrow the daily quote should differ.
+- [ ] 6. **Snooze (Android):** set a task reminder ~2 min ahead, close the app. When the notification arrives it has a "Snooze 10 min" button — tap it; the notification should return ~10 min later (repeatable). Change Settings → Snooze duration to 5 and confirm the button label updates on the next reminder.
+- [ ] 7. **Snooze (Linux, app running):** same — the desktop notification shows a Snooze button; tapping it re-notifies after the set duration while the app stays open.
+
 ## Completed
 - M1 — Create a Firebase project
 - M2 — Enable Email/Password authentication

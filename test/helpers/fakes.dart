@@ -60,12 +60,15 @@ class FakeReminderScheduler implements ReminderScheduler {
     List<Task> tasks,
     DateTime now, {
     String defaultTime = defaultReminderTime,
+    int snoozeMinutes = defaultSnoozeMinutes,
   }) async {
     syncedTaskLists.add(tasks);
     lastDefaultTime = defaultTime;
+    lastSnoozeMinutes = snoozeMinutes;
   }
 
   String? lastDefaultTime;
+  int? lastSnoozeMinutes;
 
   @override
   Future<void> showNow({required String title, required String body}) async {

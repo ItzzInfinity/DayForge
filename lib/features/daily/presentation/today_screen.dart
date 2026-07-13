@@ -5,6 +5,8 @@ import '../../../core/providers.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../core/widgets/error_retry.dart';
+import '../../quotes/domain/quotes.dart';
+import '../../quotes/providers.dart';
 import '../../tasks/domain/task.dart';
 import '../../tasks/presentation/add_task_screen.dart';
 import '../../tasks/providers.dart';
@@ -40,10 +42,40 @@ class TodayScreen extends ConsumerWidget {
               ),
             );
           }
+          // Ticked tasks sink below the pending ones so the focus stays on
+          // what's left; a banner celebrates when everything is done.
+          final logs = {
+            for (final task in active)
+              task.id: ref.watch(todayLogProvider(task.id)),
+          };
+          bool done(Task task) => logs[task.id]?.value?.completed ?? false;
+          final pending = [
+            for (final task in active)
+              if (!done(task)) task
+          ];
+          final completed = [
+            for (final task in active)
+              if (done(task)) task
+          ];
+          final allDone = pending.isEmpty &&
+              logs.values.every((log) => log.hasValue);
           return ListView(
             padding: const EdgeInsets.all(8),
             children: [
-              for (final task in active)
+              const _DailyQuoteCard(),
+              if (allDone) const _AllDoneBanner(),
+              for (final task in pending)
+                _TodayCard(task: task, dateKey: dateKey),
+              if (completed.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+                  child: Text(
+                    'Completed today',
+                    key: const Key('completed-header'),
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                ),
+              for (final task in completed)
                 _TodayCard(task: task, dateKey: dateKey),
             ],
           );
@@ -102,6 +134,94 @@ class _OnboardingEmpty extends StatelessWidget {
               label: const Text('Add your first task'),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A fresh motivational quote each day: the bundled rotation renders
+/// instantly, then upgrades to the zenquotes.io quote of the day (with
+/// visible attribution) once the fetch completes.
+class _DailyQuoteCard extends ConsumerWidget {
+  const _DailyQuoteCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final date = ref.watch(currentDateProvider);
+    final quote = ref.watch(dailyQuoteProvider).value ?? quoteOfTheDay(date);
+    final theme = Theme.of(context);
+    return Padding(
+      key: const Key('daily-quote'),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '“${quote.text}”',
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(fontStyle: FontStyle.italic),
+          ),
+          if (quote.author.isNotEmpty || quote.fromApi)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                '— ${quote.author.isEmpty ? 'Unknown' : quote.author}'
+                '${quote.fromApi ? ' · zenquotes.io' : ''}',
+                textAlign: TextAlign.right,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shown once every task active today is ticked — a small celebration so
+/// finishing the day feels like something.
+class _AllDoneBanner extends StatelessWidget {
+  const _AllDoneBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return TweenAnimationBuilder<double>(
+      key: const Key('all-done-banner'),
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.elasticOut,
+      builder: (context, value, child) => Transform.scale(
+        scale: 0.8 + 0.2 * value,
+        child: Opacity(opacity: value.clamp(0.0, 1.0), child: child),
+      ),
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        color: theme.colorScheme.primaryContainer,
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              const Text('🎉', style: TextStyle(fontSize: 40)),
+              const SizedBox(height: 8),
+              Text(
+                'All done for today!',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Every task is ticked. Enjoy the rest of your day — '
+                'your streaks thank you.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onPrimaryContainer,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -194,6 +314,15 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
           completed: value);
       ref.invalidate(todayLogProvider(widget.task.id));
       ref.invalidate(taskLogsProvider(widget.task.id));
+      if (value && mounted) {
+        final quote = encouragementQuote();
+        ScaffoldMessenger.of(context)
+          ..clearSnackBars()
+          ..showSnackBar(SnackBar(
+            content: Text('✓ ${quote.text}'
+                '${quote.author.isEmpty ? '' : ' — ${quote.author}'}'),
+          ));
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _completed = !value);

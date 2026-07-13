@@ -80,6 +80,8 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).last,
     );
+    await tester.ensureVisible(find.byKey(const Key('sign-out')));
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('sign-out')));
     await tester.pumpAndSettle();
 
@@ -260,6 +262,25 @@ void main() {
     expect(scheduler.shownNow.single, contains('Test notification'));
   });
 
+  testWidgets('changing snooze duration re-syncs reminders with it',
+      (tester) async {
+    final scheduler = FakeReminderScheduler();
+    final repo = FakeAuthRepository(
+        initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    await tester.pumpWidget(appWith(repo, scheduler: scheduler));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('snooze-duration')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('snooze-30')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('30 minutes'), findsOneWidget);
+    expect(scheduler.lastSnoozeMinutes, 30);
+  });
+
   testWidgets('add-task form rejects a missing title and bad duration',
       (tester) async {
     final repo =
@@ -317,6 +338,8 @@ void main() {
       expect(find.text('Meditate'), findsOneWidget);
       expect(find.text('Day 1 of 7'), findsOneWidget);
       expect(find.text('Future task'), findsNothing);
+      // Daily quote card renders (bundled fallback in tests — no network).
+      expect(find.byKey(const Key('daily-quote')), findsOneWidget);
     });
 
     testWidgets('ticking the checkbox persists the daily log',
@@ -403,6 +426,19 @@ void main() {
       // Calendar month for the task range (Jul 13–19) is shown.
       expect(find.text('July 2026'), findsOneWidget);
 
+      // Day numbers scale with the circle (readable, capped 12–22) and the
+      // grid itself stays ≤420px wide even on desktop-width surfaces.
+      final dayText = tester.widget<Text>(find.descendant(
+        of: find.byKey(const ValueKey('cal-2026-07-13')),
+        matching: find.text('13'),
+      ));
+      expect(dayText.style?.fontSize, greaterThanOrEqualTo(12));
+      expect(dayText.style?.fontSize, lessThanOrEqualTo(22));
+      expect(
+        tester.getSize(find.byType(GridView).first).width,
+        lessThanOrEqualTo(420),
+      );
+
       // Tapping the completed day shows the remark.
       await tester.tap(find.byKey(const ValueKey('cal-2026-07-13')));
       await tester.pumpAndSettle();
@@ -434,6 +470,47 @@ void main() {
           find.byKey(const ValueKey('tick-t1')));
       expect(checkbox.value, isTrue);
       expect(find.text('done early'), findsOneWidget);
+    });
+
+    testWidgets('ticked tasks sink below pending under a Completed header',
+        (tester) async {
+      gateway.docs['users/u/tasks/t3'] =
+          seedTask('Journal', '2026-07-13', 7);
+      gateway.docs['users/u/tasks/t3/daily_logs/2026-07-13'] = {
+        'date': '2026-07-13',
+        'completed': true,
+        'updatedAt': DateTime.utc(2026, 7, 13),
+      };
+      await pumpSignedIn(tester);
+
+      expect(find.byKey(const Key('completed-header')), findsOneWidget);
+      expect(find.byKey(const Key('all-done-banner')), findsNothing);
+      // Completed Journal renders below pending Meditate and the header.
+      final meditateY = tester.getTopLeft(find.text('Meditate')).dy;
+      final headerY =
+          tester.getTopLeft(find.byKey(const Key('completed-header'))).dy;
+      final journalY = tester.getTopLeft(find.text('Journal')).dy;
+      expect(meditateY, lessThan(headerY));
+      expect(headerY, lessThan(journalY));
+    });
+
+    testWidgets('ticking the last pending task shows the congrats banner',
+        (tester) async {
+      await pumpSignedIn(tester);
+      expect(find.byKey(const Key('all-done-banner')), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('tick-t1')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('all-done-banner')), findsOneWidget);
+      expect(find.text('All done for today!'), findsOneWidget);
+      // Ticking also pops an encouragement quote snackbar.
+      expect(find.textContaining('✓ '), findsOneWidget);
+
+      // Unticking brings the task back up and removes the banner.
+      await tester.tap(find.byKey(const ValueKey('tick-t1')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('all-done-banner')), findsNothing);
     });
   });
 
@@ -470,17 +547,59 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('defaults to active; archived shown via its filter chip',
+    testWidgets('defaults to active; archived tasks never appear here',
         (tester) async {
       await pumpTasksTab(tester);
 
       expect(find.text('Meditate'), findsOneWidget);
       expect(find.text('Old habit'), findsNothing);
+      // The archived filter chip is gone entirely.
+      expect(find.byKey(const Key('filter-archived')), findsNothing);
 
-      await tester.tap(find.byKey(const Key('filter-archived')));
+      // Even the All filter hides archived tasks.
+      await tester.tap(find.byKey(const Key('filter-all')));
       await tester.pumpAndSettle();
+      expect(find.text('Old habit'), findsNothing);
+    });
+
+    testWidgets('tapping the selected status chip again resets to All',
+        (tester) async {
+      gateway.docs['users/u/tasks/t4'] = seed('Done thing', 'completed');
+      await pumpTasksTab(tester);
+
+      // Default filter Active hides the completed task.
+      expect(find.text('Done thing'), findsNothing);
+
+      // Second tap on the already-selected Active chip → back to All.
+      await tester.tap(find.byKey(const Key('filter-active')));
+      await tester.pumpAndSettle();
+      expect(find.text('Done thing'), findsOneWidget);
+      expect(find.text('Meditate'), findsOneWidget);
+    });
+
+    testWidgets('Settings → Archived tasks lists, restores and deletes',
+        (tester) async {
+      await pumpTasksTab(tester);
+
+      await tester.tap(find.text('Settings'));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('archived-tasks')),
+        200,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.ensureVisible(find.byKey(const Key('archived-tasks')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('archived-tasks')));
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(AppBar, 'Archived tasks'), findsOneWidget);
       expect(find.text('Old habit'), findsOneWidget);
-      expect(find.text('Meditate'), findsNothing);
+
+      await tester.tap(find.byKey(const ValueKey('restore-t2')));
+      await tester.pumpAndSettle();
+      expect(gateway.docs['users/u/tasks/t2']?['status'], 'active');
+      expect(find.textContaining('Nothing archived'), findsOneWidget);
     });
 
     testWidgets('search and category filters narrow the list',
@@ -676,6 +795,8 @@ void main() {
         200,
         scrollable: find.byType(Scrollable).last,
       );
+      await tester.ensureVisible(find.byKey(const Key('export-data')));
+      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('export-data')));
       await tester.pumpAndSettle();
     }

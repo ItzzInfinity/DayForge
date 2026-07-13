@@ -2,7 +2,27 @@
 
 > Resume protocol: read this file first, continue from **Next step**, do not redo completed work, always run the self-check after each task.
 
-## Current state — 2026-07-13 (session 8) — PROJECT COMPLETE (pending M8 user verification)
+## Current state — 2026-07-13 (session 9) — Feedback round 1 COMPLETE (pending M8+M9 user verification)
+
+- **Current phase:** All FSD phases done (session 8). Session 9 delivered the user's six feedback features.
+- **Last completed task:** Feedback round 1 (all six items) + fresh release builds (Linux bundle + app-release.apk 58 MB) + docs/M9.
+- **Next task:** None queued — wait for M8 (final acceptance) and M9 (feedback features) results; fix anything reported. Validation command: `flutter analyze && flutter test && flutter build linux --release`.
+
+### Feedback round 1 summary (2026-07-13, session 9) — 93 tests passing
+1. **Filter double-tap → All:** ChoiceChip onSelected now toggles (`_statusFilter == status ? null : status`); Archived chip removed entirely.
+2. **Archive hidden:** Tasks tab filters out archived tasks before building categories/list; archiving shows a snackbar pointing to the new `ArchiveScreen` (`lib/features/tasks/presentation/archive_screen.dart`, restore key `restore-{id}`, delete key `archive-delete-{id}`), reached via Settings tile key `archived-tasks`.
+3. **Calendar readability:** task-detail month grids wrapped in `ConstrainedBox(maxWidth: 420)`; `_DayCell` uses LayoutBuilder → fontSize `(cellWidth*0.4).clamp(12,22)`, w500.
+4. **Today ordering + congrats:** Today watches `todayLogProvider` per active task, splits pending/completed (completed under header key `completed-header`), `_AllDoneBanner` (key `all-done-banner`, elasticOut TweenAnimationBuilder) when every log loaded & completed.
+5. **Quotes:** `lib/features/quotes/` — domain (`Quote`, `quoteOfTheDay` day-of-year rotation, `encouragementQuote`), data (`local_quotes.dart` **593 distinct quotes**, `quote_service.dart` zenquotes.io `/api/today`, 4s timeout, SharedPreferences day-cache, falls back to bundled), `providers.dart` (`dailyQuoteProvider` keyed off `currentDateProvider`). Today card key `daily-quote` renders bundled quote instantly, upgrades to API quote (shows "· zenquotes.io" attribution). Tick → encouragement snackbar (`✓ quote — author`, clearSnackBars first).
+6. **Snooze:** `AppSettings.snoozeMinutes` (default 10, dialog keys `snooze-duration`/`snooze-{5,10,15,30,60}`); `ReminderScheduler.sync` gained `snoozeMinutes` param; reminders carry payload (`encodeSnoozePayload` JSON) + `AndroidNotificationAction`/`LinuxNotificationAction` "Snooze N min"; snoozed one-shot lands on the task's reserved `+9` id slot (`snoozeNotificationId`). Foreground handler `_onResponse` (Linux: in-app Timer → show; Android: zonedSchedule now+N); background (app closed, Android) `notificationActionBackground` top-level `@pragma('vm:entry-point')`. Manifest gained `ActionBroadcastReceiver`. Windows toasts: no action support in the plugin — documented limitation.
+
+**Test gotchas learned this session:**
+- `SharedPreferences.getInstance()` in widget tests **hangs forever** (doesn't throw) without `setMockInitialValues` — hence the quote card renders `dailyQuoteProvider.value ?? quoteOfTheDay(date)` so it never depends on that future completing.
+- `scrollUntilVisible` stops once the target *exists* (ListView cacheExtent builds it off-screen) — taps then miss. Fix: follow with `tester.ensureVisible(...)` + `pumpAndSettle` (applied to sign-out, export-data, archived-tasks taps).
+
+**Validation:** analyze clean · 93 tests pass (was 80) · Linux release rebuilt · app-release.apk rebuilt (58 MB, pulled nothing new) · release binary smoke-launched 12s without errors.
+
+## Previous state — session 8 — PROJECT COMPLETE (pending M8 user verification)
 
 - **Current phase:** Done. All FSD phases (0–6) complete; final acceptance sweep done.
 - **Last completed task:** Final acceptance sweep (requirements.md, qa-checklist.md, README, release artifacts, M8 checklist)
@@ -137,9 +157,9 @@ Tests: 9 passing (`test/widget_test.dart` — auth flow, profile doc, navigation
 ### Blocked
 - Nothing. Manual items M1–M5 all complete; no new manual items open.
 
-### Next step (exact)
-1. Wait for the user's M8 verification results (manual-task.md). Fix anything reported, re-validating with `flutter analyze && flutter test && flutter build linux --release`.
-2. If the user requests optional features, order of value: JSON import/restore (reads the formatVersion-1 export) → snooze → FCM → Google sign-in.
+### Next step (exact) — superseded by session 9 header above
+1. Wait for the user's M8 + M9 verification results (manual-task.md). Fix anything reported, re-validating with `flutter analyze && flutter test && flutter build linux --release`.
+2. If the user requests optional features, order of value: JSON import/restore (reads the formatVersion-1 export) → FCM → Google sign-in. (Snooze shipped in session 9.)
 3. No other work is queued. Every phase in docs/roadmap.md is ✔.
 
 ### Assumptions

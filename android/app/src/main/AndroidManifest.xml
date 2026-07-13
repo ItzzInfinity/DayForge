@@ -33,6 +33,10 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- Handles notification action buttons (Snooze) in the background. -->
+        <receiver
+            android:exported="false"
+            android:name="com.dexterous.flutterlocalnotifications.ActionBroadcastReceiver" />
         <!-- Re-register scheduled reminders after a reboot or app update. -->
         <receiver
             android:exported="false"

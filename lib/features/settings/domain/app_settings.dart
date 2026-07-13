@@ -9,6 +9,7 @@ class AppSettings {
     this.defaultDurationDays = 21,
     this.defaultReminderTime = notifications.defaultReminderTime,
     this.notificationsEnabled = true,
+    this.snoozeMinutes = 10,
     this.themeMode = 'system',
   });
 
@@ -19,6 +20,9 @@ class AppSettings {
 
   final bool notificationsEnabled;
 
+  /// How long the reminder notification's Snooze button postpones it.
+  final int snoozeMinutes;
+
   /// `system` / `light` / `dark`.
   final String themeMode;
 
@@ -26,6 +30,7 @@ class AppSettings {
         'defaultDurationDays': defaultDurationDays,
         'defaultReminderTime': defaultReminderTime,
         'notificationsEnabled': notificationsEnabled,
+        'snoozeMinutes': snoozeMinutes,
         'themeMode': themeMode,
       };
 
@@ -38,6 +43,7 @@ class AppSettings {
           defaults.defaultReminderTime,
       notificationsEnabled: map['notificationsEnabled'] as bool? ??
           defaults.notificationsEnabled,
+      snoozeMinutes: map['snoozeMinutes'] as int? ?? defaults.snoozeMinutes,
       themeMode: map['themeMode'] as String? ?? defaults.themeMode,
     );
   }
@@ -46,12 +52,14 @@ class AppSettings {
     int? defaultDurationDays,
     String? defaultReminderTime,
     bool? notificationsEnabled,
+    int? snoozeMinutes,
     String? themeMode,
   }) {
     return AppSettings(
       defaultDurationDays: defaultDurationDays ?? this.defaultDurationDays,
       defaultReminderTime: defaultReminderTime ?? this.defaultReminderTime,
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+      snoozeMinutes: snoozeMinutes ?? this.snoozeMinutes,
       themeMode: themeMode ?? this.themeMode,
     );
   }

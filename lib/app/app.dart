@@ -62,6 +62,7 @@ class AuthGate extends ConsumerWidget {
         settings.notificationsEnabled ? tasks : const [],
         ref.read(currentDateProvider),
         defaultTime: settings.defaultReminderTime,
+        snoozeMinutes: settings.snoozeMinutes,
       );
     }
 

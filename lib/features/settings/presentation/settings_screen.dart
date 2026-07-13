@@ -9,6 +9,7 @@ import '../../auth/providers.dart';
 import '../../daily/providers.dart';
 import '../../export/domain/exporters.dart';
 import '../../export/providers.dart';
+import '../../tasks/presentation/archive_screen.dart';
 import '../../tasks/providers.dart';
 import '../domain/app_settings.dart';
 import '../providers.dart';
@@ -166,6 +167,31 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _pickDefaultReminderTime(context, ref, settings),
           ),
           ListTile(
+            key: const Key('snooze-duration'),
+            enabled: settings.notificationsEnabled,
+            leading: const Icon(Icons.snooze),
+            title: const Text('Snooze duration'),
+            subtitle: Text('${settings.snoozeMinutes} minutes'),
+            onTap: () async {
+              final minutes = await showDialog<int>(
+                context: context,
+                builder: (context) => SimpleDialog(
+                  title: const Text('Snooze reminders for…'),
+                  children: [
+                    for (final m in const [5, 10, 15, 30, 60])
+                      SimpleDialogOption(
+                        key: Key('snooze-$m'),
+                        onPressed: () => Navigator.of(context).pop(m),
+                        child: Text('$m minutes'),
+                      ),
+                  ],
+                ),
+              );
+              if (minutes == null) return;
+              await _update(ref, (s) => s.copyWith(snoozeMinutes: minutes));
+            },
+          ),
+          ListTile(
             key: const Key('default-duration'),
             leading: const Icon(Icons.event_repeat),
             title: const Text('Default task duration'),
@@ -217,6 +243,15 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: const Text('All tasks, daily history and settings — '
                 'JSON, CSV or Markdown'),
             onTap: () => _exportData(context, ref),
+          ),
+          ListTile(
+            key: const Key('archived-tasks'),
+            leading: const Icon(Icons.archive_outlined),
+            title: const Text('Archived tasks'),
+            subtitle: const Text('Restore or delete tasks you archived'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const ArchiveScreen()),
+            ),
           ),
           const Divider(),
           ListTile(

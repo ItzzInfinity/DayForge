@@ -104,27 +104,40 @@ class _DetailBody extends StatelessWidget {
             style: Theme.of(context).textTheme.titleSmall,
           ),
           const SizedBox(height: 4),
-          _WeekdayHeader(),
-          GridView.count(
-            crossAxisCount: 7,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            children: [
-              for (final cell in monthCells(m.year, m.month))
-                cell == null
-                    ? const SizedBox.shrink()
-                    : _DayCell(
-                        dateKey: toDateKey(cell),
-                        day: cell.day,
-                        status: dayStatus(
-                          dateKey: toDateKey(cell),
-                          task: task,
-                          completedDates: completedDates,
-                          todayKey: todayKey,
-                        ),
-                        log: logsByDate[toDateKey(cell)],
-                      ),
-            ],
+          // Cap the grid width so day circles keep a readable proportion on
+          // wide desktop windows instead of huge circles with tiny numbers.
+          Align(
+            alignment: Alignment.topLeft,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _WeekdayHeader(),
+                  GridView.count(
+                    crossAxisCount: 7,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    children: [
+                      for (final cell in monthCells(m.year, m.month))
+                        cell == null
+                            ? const SizedBox.shrink()
+                            : _DayCell(
+                                dateKey: toDateKey(cell),
+                                day: cell.day,
+                                status: dayStatus(
+                                  dateKey: toDateKey(cell),
+                                  task: task,
+                                  completedDates: completedDates,
+                                  todayKey: todayKey,
+                                ),
+                                log: logsByDate[toDateKey(cell)],
+                              ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
           ),
           const SizedBox(height: 16),
         ],
@@ -229,13 +242,19 @@ class _DayCell extends StatelessWidget {
             shape: BoxShape.circle,
             border: border == null ? null : Border.all(color: border),
           ),
-          child: Center(
-            child: Text(
-              '$day',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: foreground),
+          // Scale the day number with the circle so it stays readable at
+          // any cell size (was a fixed small style lost in big circles).
+          child: LayoutBuilder(
+            builder: (context, constraints) => Center(
+              child: Text(
+                '$day',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w500,
+                      fontSize:
+                          (constraints.maxWidth * 0.4).clamp(12.0, 22.0),
+                    ),
+              ),
             ),
           ),
         ),

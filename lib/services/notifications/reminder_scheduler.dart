@@ -1,7 +1,15 @@
+import 'dart:convert';
+
 import '../../features/tasks/domain/task.dart';
 
 /// Global default reminder time until the user-editable settings doc ships.
 const defaultReminderTime = '08:00';
+
+/// Action id of the notification "Snooze" button.
+const snoozeActionId = 'snooze';
+
+/// Default snooze duration; user-configurable via AppSettings.snoozeMinutes.
+const defaultSnoozeMinutes = 10;
 
 /// Schedules daily "tick your task" reminders. Platform behavior differs
 /// (docs/architecture.md → reminders):
@@ -14,11 +22,13 @@ abstract interface class ReminderScheduler {
 
   /// Replaces every scheduled reminder so they match [tasks]: one daily
   /// reminder per active, not-yet-ended task at its reminderTime (or
-  /// [defaultTime] from the user's settings).
+  /// [defaultTime] from the user's settings). Reminders carry a Snooze
+  /// button that postpones them by [snoozeMinutes].
   Future<void> sync(
     List<Task> tasks,
     DateTime now, {
     String defaultTime = defaultReminderTime,
+    int snoozeMinutes = defaultSnoozeMinutes,
   });
 
   /// Fires a notification immediately, so the user can verify notifications
@@ -52,3 +62,33 @@ DateTime nextOccurrence(DateTime now, int hour, int minute) {
   }
   return candidate;
 }
+
+/// Notification payload carried by a reminder so its Snooze action knows
+/// what to re-show and how long to wait — including in the Android
+/// background isolate, where only the payload string is available.
+String encodeSnoozePayload({
+  required String title,
+  required String body,
+  required int minutes,
+}) =>
+    jsonEncode({'title': title, 'body': body, 'minutes': minutes});
+
+({String title, String body, int minutes})? decodeSnoozePayload(
+    String? payload) {
+  if (payload == null || payload.isEmpty) return null;
+  try {
+    final map = jsonDecode(payload) as Map<String, dynamic>;
+    return (
+      title: map['title'] as String,
+      body: map['body'] as String,
+      minutes: map['minutes'] as int,
+    );
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Id for the snoozed one-shot: the task's reserved `+9` slot (base ids are
+/// multiples of 10; Windows uses +0..+6), so repeats replace themselves and
+/// never collide with another task's reminders.
+int snoozeNotificationId(int firedId) => (firedId ~/ 10) * 10 + 9;

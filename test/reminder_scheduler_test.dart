@@ -21,6 +21,35 @@ void main() {
     });
   });
 
+  group('snooze payload', () {
+    test('round-trips title, body and minutes', () {
+      final encoded = encodeSnoozePayload(
+          title: 'Advanced To-Do', body: 'Tick "Read" today.', minutes: 15);
+      final decoded = decodeSnoozePayload(encoded);
+      expect(decoded, isNotNull);
+      expect(decoded!.title, 'Advanced To-Do');
+      expect(decoded.body, 'Tick "Read" today.');
+      expect(decoded.minutes, 15);
+    });
+
+    test('rejects null, empty and malformed payloads', () {
+      expect(decodeSnoozePayload(null), isNull);
+      expect(decodeSnoozePayload(''), isNull);
+      expect(decodeSnoozePayload('not json'), isNull);
+      expect(decodeSnoozePayload('{"title":"x"}'), isNull);
+    });
+  });
+
+  group('snoozeNotificationId', () {
+    test('maps any fired id to the task\'s reserved +9 slot', () {
+      // Base reminder (Android/Linux) and Windows day offsets all land on
+      // the same slot, so repeated snoozes replace rather than pile up.
+      expect(snoozeNotificationId(420), 429);
+      expect(snoozeNotificationId(426), 429);
+      expect(snoozeNotificationId(429), 429);
+    });
+  });
+
   group('nextOccurrence', () {
     test('same day when the time is still ahead', () {
       final now = DateTime(2026, 7, 13, 6, 30);

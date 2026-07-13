@@ -48,7 +48,12 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
       ),
       body: ContentWidth(
           child: tasksAsync.when(
-        data: (tasks) {
+        data: (allTasks) {
+          // Archived tasks live in Settings → Archived tasks, never here.
+          final tasks = [
+            for (final task in allTasks)
+              if (task.status != TaskStatus.archived) task
+          ];
           if (tasks.isEmpty) {
             return const Center(
               child: Text('No tasks yet.\nTap + to add your first one.',
@@ -86,7 +91,6 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                       ('All', null),
                       ('Active', TaskStatus.active),
                       ('Completed', TaskStatus.completed),
-                      ('Archived', TaskStatus.archived),
                     ])
                       Padding(
                         padding: const EdgeInsets.only(right: 8, top: 8),
@@ -94,8 +98,9 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
                           key: Key('filter-${label.toLowerCase()}'),
                           label: Text(label),
                           selected: _statusFilter == status,
-                          onSelected: (_) =>
-                              setState(() => _statusFilter = status),
+                          // Tapping the already-selected chip resets to All.
+                          onSelected: (_) => setState(() => _statusFilter =
+                              _statusFilter == status ? null : status),
                           visualDensity: VisualDensity.compact,
                         ),
                       ),
@@ -150,9 +155,19 @@ class _TaskTile extends ConsumerWidget {
 
   final Task task;
 
-  Future<void> _setStatus(WidgetRef ref, TaskStatus status) async {
+  Future<void> _setStatus(
+    BuildContext context,
+    WidgetRef ref,
+    TaskStatus status,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
     await ref.read(taskRepositoryProvider)?.setStatus(task.id, status);
     ref.invalidate(tasksProvider);
+    if (status == TaskStatus.archived) {
+      messenger.showSnackBar(const SnackBar(
+        content: Text('Archived — find it under Settings → Archived tasks.'),
+      ));
+    }
   }
 
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
@@ -205,9 +220,9 @@ class _TaskTile extends ConsumerWidget {
           PopupMenuButton<String>(
             key: ValueKey('task-menu-${task.id}'),
             onSelected: (action) => switch (action) {
-              'complete' => _setStatus(ref, TaskStatus.completed),
-              'reactivate' => _setStatus(ref, TaskStatus.active),
-              'archive' => _setStatus(ref, TaskStatus.archived),
+              'complete' => _setStatus(context, ref, TaskStatus.completed),
+              'reactivate' => _setStatus(context, ref, TaskStatus.active),
+              'archive' => _setStatus(context, ref, TaskStatus.archived),
               'delete' => _delete(context, ref),
               _ => Future<void>.value(),
             },
@@ -222,8 +237,7 @@ class _TaskTile extends ConsumerWidget {
                   value: 'reactivate',
                   child: Text('Reactivate'),
                 ),
-              if (task.status != TaskStatus.archived)
-                const PopupMenuItem(value: 'archive', child: Text('Archive')),
+              const PopupMenuItem(value: 'archive', child: Text('Archive')),
               const PopupMenuItem(value: 'delete', child: Text('Delete')),
             ],
           ),

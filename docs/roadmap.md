@@ -79,4 +79,13 @@ Legend: `[ ]` pending · `[~]` in progress · `[x]` done · `[M]` waiting on man
 - [x] Release artifacts rebuilt: Linux release bundle + `app-release.apk` (56.6 MB)
 - [M] M8 — final user verification checklist (cross-device sync, offline, export, theme, onboarding; Windows optional) — waiting on user
 
-Optional leftovers (only if requested): JSON import/restore · FCM push · snooze/quiet hours · Google sign-in
+Optional leftovers (only if requested): JSON import/restore · FCM push · Google sign-in
+
+## Feedback round 1 (2026-07-13, session 9) — user-requested features
+- [x] Tasks tab: tapping the already-selected status filter chip resets to All
+- [x] Archive hidden from main list — archived tasks live in Settings → Archived tasks (restore/delete there); Archived filter chip removed
+- [x] Calendar: day numbers scale with the circle (12–22px) and the grid is capped at 420px so desktop circles stay proportionate
+- [x] Today: ticked tasks sink below pending under a "Completed today" header; 🎉 congrats banner when everything active today is done
+- [x] Motivational quotes: zenquotes.io quote-of-the-day (free API, cached daily, attributed) with a bundled 593-quote offline rotation; encouragement quote snackbar on every tick
+- [x] Snooze: reminder notifications carry a "Snooze N min" button (Android + Linux; Windows toasts have no action support), duration configurable in Settings (5/10/15/30/60, default 10)
+- [M] M9 — device verification of the above on Linux + Android (see ../manual-task.md)

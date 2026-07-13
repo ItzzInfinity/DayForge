@@ -10,6 +10,28 @@ import '../../core/utils/date_utils.dart';
 import '../../features/tasks/domain/task.dart';
 import 'reminder_scheduler.dart';
 
+/// Handles the Snooze action while the app process is NOT running
+/// (Android only: actions with showsUserInterface=false arrive in a
+/// background isolate). Schedules a one-shot repeat of the reminder.
+@pragma('vm:entry-point')
+void notificationActionBackground(NotificationResponse response) {
+  if (response.actionId != snoozeActionId) return;
+  final payload = decodeSnoozePayload(response.payload);
+  if (payload == null) return;
+  tzdata.initializeTimeZones();
+  FlutterLocalNotificationsPlugin().zonedSchedule(
+    id: snoozeNotificationId(response.id ?? 0),
+    title: payload.title,
+    body: payload.body,
+    scheduledDate: tz.TZDateTime.now(tz.UTC)
+        .add(Duration(minutes: payload.minutes)),
+    notificationDetails:
+        LocalReminderScheduler.detailsWithSnooze(payload.minutes),
+    payload: response.payload,
+    androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+  );
+}
+
 /// [ReminderScheduler] backed by flutter_local_notifications.
 ///
 /// Times are scheduled as absolute UTC instants; in DST-observing zones a
@@ -34,8 +56,48 @@ class LocalReminderScheduler implements ReminderScheduler {
         guid: '7f8a1e5c-4b2d-4f9a-9c3e-6d5b8a7c2e10',
       ),
     );
-    await _plugin.initialize(settings: settings);
+    await _plugin.initialize(
+      settings: settings,
+      onDidReceiveNotificationResponse: _onResponse,
+      onDidReceiveBackgroundNotificationResponse:
+          notificationActionBackground,
+    );
     _initialized = true;
+  }
+
+  /// Snooze action tapped while the app runs (always the case on Linux,
+  /// where reminders only exist in-process; possible on Android too).
+  Future<void> _onResponse(NotificationResponse response) async {
+    if (response.actionId != snoozeActionId) return;
+    final payload = decodeSnoozePayload(response.payload);
+    if (payload == null) return;
+    final id = snoozeNotificationId(response.id ?? 0);
+    debugPrint('reminders: snoozing id ${response.id} for '
+        '${payload.minutes} min');
+    if (Platform.isLinux) {
+      // No OS scheduling on Linux — an in-app timer re-shows it.
+      _linuxTimers[id]?.cancel();
+      _linuxTimers[id] = Timer(Duration(minutes: payload.minutes), () {
+        _plugin.show(
+          id: id,
+          title: payload.title,
+          body: payload.body,
+          notificationDetails: detailsWithSnooze(payload.minutes),
+          payload: response.payload,
+        );
+      });
+    } else {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: payload.title,
+        body: payload.body,
+        scheduledDate: tz.TZDateTime.now(tz.UTC)
+            .add(Duration(minutes: payload.minutes)),
+        notificationDetails: detailsWithSnooze(payload.minutes),
+        payload: response.payload,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+    }
   }
 
   @override
@@ -50,6 +112,37 @@ class LocalReminderScheduler implements ReminderScheduler {
     return true; // Windows/Linux have no runtime notification permission.
   }
 
+  /// Reminder details incl. a Snooze button (Android + Linux; the Windows
+  /// plugin has no action support, so toasts there are snooze-less).
+  static NotificationDetails detailsWithSnooze(int snoozeMinutes) =>
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          'daily_reminders',
+          'Daily reminders',
+          channelDescription: 'Reminds you to tick your daily tasks',
+          importance: Importance.high,
+          priority: Priority.high,
+          actions: [
+            AndroidNotificationAction(
+              snoozeActionId,
+              'Snooze $snoozeMinutes min',
+              showsUserInterface: false,
+              cancelNotification: true,
+            ),
+          ],
+        ),
+        linux: LinuxNotificationDetails(
+          actions: [
+            LinuxNotificationAction(
+              key: snoozeActionId,
+              label: 'Snooze $snoozeMinutes min',
+            ),
+          ],
+        ),
+        windows: const WindowsNotificationDetails(),
+      );
+
+  /// Plain details for one-off notifications (test notification).
   NotificationDetails get _details => const NotificationDetails(
         android: AndroidNotificationDetails(
           'daily_reminders',
@@ -80,6 +173,7 @@ class LocalReminderScheduler implements ReminderScheduler {
     List<Task> tasks,
     DateTime now, {
     String defaultTime = defaultReminderTime,
+    int snoozeMinutes = defaultSnoozeMinutes,
   }) async {
     await _init();
     // Small task counts: clearing and re-adding is the simplest way to stay
@@ -96,6 +190,11 @@ class LocalReminderScheduler implements ReminderScheduler {
       if (task.endDate.compareTo(todayKey) < 0) continue;
       final time = parseHhMm(task.reminderTime ?? defaultTime);
       final baseId = stableNotificationId(task.id) * 10;
+      final payload = encodeSnoozePayload(
+        title: 'Advanced To-Do',
+        body: _bodyFor(task),
+        minutes: snoozeMinutes,
+      );
 
       if (Platform.isAndroid) {
         await _plugin.zonedSchedule(
@@ -106,7 +205,8 @@ class LocalReminderScheduler implements ReminderScheduler {
             nextOccurrence(now, time.hour, time.minute).toUtc(),
             tz.UTC,
           ),
-          notificationDetails: _details,
+          notificationDetails: detailsWithSnooze(snoozeMinutes),
+          payload: payload,
           androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           matchDateTimeComponents: DateTimeComponents.time,
         );
@@ -121,25 +221,28 @@ class LocalReminderScheduler implements ReminderScheduler {
             title: 'Advanced To-Do',
             body: _bodyFor(task),
             scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
-            notificationDetails: _details,
+            notificationDetails: detailsWithSnooze(snoozeMinutes),
+            payload: payload,
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
           );
           when = when.add(const Duration(days: 1));
         }
       } else if (Platform.isLinux) {
-        _scheduleLinuxTimer(task, time.hour, time.minute, baseId);
+        _scheduleLinuxTimer(task, time.hour, time.minute, baseId,
+            snoozeMinutes, payload);
       }
       debugPrint(
         'reminders: armed "${task.title}" daily at '
         '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')} '
-        '(id $baseId, until ${task.endDate})',
+        '(id $baseId, until ${task.endDate}, snooze ${snoozeMinutes}m)',
       );
     }
   }
 
   /// Linux has no OS-level scheduling; fire from an in-app timer while the
   /// app is running, then re-arm for the next day.
-  void _scheduleLinuxTimer(Task task, int hour, int minute, int id) {
+  void _scheduleLinuxTimer(Task task, int hour, int minute, int id,
+      int snoozeMinutes, String payload) {
     final now = DateTime.now();
     final next = nextOccurrence(now, hour, minute);
     if (toDateKey(next).compareTo(task.endDate) > 0) return;
@@ -149,13 +252,14 @@ class LocalReminderScheduler implements ReminderScheduler {
           id: id,
           title: 'Advanced To-Do',
           body: _bodyFor(task),
-          notificationDetails: _details,
+          notificationDetails: detailsWithSnooze(snoozeMinutes),
+          payload: payload,
         );
         debugPrint('reminders: fired "${task.title}" (id $id)');
       } catch (e) {
         debugPrint('reminders: show failed for "${task.title}": $e');
       } finally {
-        _scheduleLinuxTimer(task, hour, minute, id);
+        _scheduleLinuxTimer(task, hour, minute, id, snoozeMinutes, payload);
       }
     });
   }
