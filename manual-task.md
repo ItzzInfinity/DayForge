@@ -1,0 +1,65 @@
+# Manual Tasks (require your action)
+
+Everything that needs an account, a key, or a console click lives here. Claude Code cannot do these for you. Each item says exactly what to do and which roadmap task it unblocks. Nothing here is needed for Phase 1 Task 1–3.
+
+## Pending
+
+### M1 — Create a Firebase project (unblocks Phase 1, Task 4)
+ - [x] 1. Go to https://console.firebase.google.com and sign in with a Google account.
+ - [x] 2. Click **Add project**, name it (e.g. `advanced-todo`), disable Google Analytics (not needed), create.
+ - [x] 3. Stay on the free **Spark** plan — do not enter billing details.
+ - [x] 4. Done 2026-07-13: `firebase login` completed (account pcinfinitesolutions@gmail.com) and `flutterfire configure` linked the app to project `advanced-todo-infinite` (android + windows apps registered).
+
+### M2 — Enable Email/Password authentication (unblocks Phase 1, Task 5)
+ - [x] 1. In the Firebase console → **Build → Authentication → Get started**.
+ - [x] 2. Under **Sign-in method**, enable **Email/Password**. Save.
+
+### M3 — Enable Cloud Firestore (unblocks Phase 1, Task 6)
+ - [x] 1. In the Firebase console → **Build → Firestore Database → Create database**.
+ - [x] 2. Choose a location close to you (e.g. `asia-south1` for India). Start in **production mode** (Claude Code will write the security rules).
+
+### M4 — Android toolchain (only needed when you want to build/run the Android app)
+ - [x] 1. Install Android Studio from https://developer.android.com/studio (or just the command-line SDK tools).
+ - [x] 2. Run `flutter doctor` and follow its Android licence prompts (`flutter doctor --android-licenses`).
+3. Note: `flutter create` warned that the installed Java version is newer than the project's Gradle supports. When you set up Android, tell Claude Code and it will bump `android/gradle/wrapper/gradle-wrapper.properties` to a compatible Gradle version.
+
+### M5 — Linux desktop build packages (needed to run the app on this machine)
+ - [x] 1. Run in a terminal (requires sudo):
+```
+sudo apt-get install clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev libstdc++-12-dev
+```
+- [x] Then run `flutter doctor` to confirm "Linux toolchain" shows a checkmark.
+
+### M6 — Verify reminders on your Android phone (optional, when convenient)
+1. Enable USB debugging on the phone, plug it in, run `flutter devices` to confirm it's seen.
+2. Install the app: `flutter run` (or `flutter install` after a build) from the repo root.
+- [x] Took the app-debug.apk and installed it on my Android phone.
+- [x] Sign in, add a task with a reminder time a few minutes ahead, close the app, and confirm the notification arrives (allow the notification permission when prompted).
+- [x] Got Notification on my Android phone.
+
+### M7 — Verify the Linux app end to end
+Run the release build from the repo root:
+```
+./build/linux/x64/release/bundle/advanced_todo
+```
+Then walk this checklist (each step maps to an acceptance criterion in FSD.md):
+
+- [x] 1. **Sign up:** create an account with your real email + a password (min 6 chars). You should land on the Today screen.
+- [x] 2. **Add a task:** Tasks tab → + → give it a title, leave duration 21, set a reminder time ~3 minutes from now → Create. It appears in the list with its date range.
+- [x] 3. **Tick it:** Today tab → the task shows "Day 1 of 21" → tick the checkbox.
+- [x] 4. **Remark:** type a short note in the "Add a remark for today…" field and press Enter.
+- [x] 5. **Cloud sync:** open https://console.firebase.google.com/project/advanced-todo-infinite/firestore and confirm you see `users/<your-uid>/tasks/<task>/daily_logs/<today>` with `completed: true` and your remark.
+- [x] 6. **Persistence:** close the app fully, reopen it — you should still be signed in, with the tick and remark intact.
+- [x] 7. **Reminder (app running):** verified 2026-07-13 after re-test — reminder fired simultaneously on Android phone and Ubuntu. (First attempt failed only because the reminder time had already passed during earlier checklist steps; diagnosis in docs/checkpoints.md.)
+- [x] 8. **Sign out/in:** Settings tab → Sign out → sign back in — data still there.
+
+Report anything that fails (with what you saw) and Claude Code will fix it before moving on.
+
+## Completed
+- M1 — Create a Firebase project
+- M2 — Enable Email/Password authentication
+- M3 — Enable Cloud Firestore
+- M4 — Android toolchain
+- M5 — Linux desktop build packages
+- M6 — Reminders verified on Android phone (2026-07-13)
+- M7 — Linux app verified end to end, incl. reminders (2026-07-13)

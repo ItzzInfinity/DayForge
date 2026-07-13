@@ -1,0 +1,103 @@
+# Checkpoints — Resume Notes
+
+> Resume protocol: read this file first, continue from **Next step**, do not redo completed work, always run the self-check after each task.
+
+## Current state — 2026-07-13 (session 5) — Phase 3: local notifications COMPLETE
+
+- **Current phase:** Phase 4 — Progress tracking (starting); Phase 3 core done (FCM/snooze deferred as optional)
+- **Last completed task:** Settings doc + preferences (notifications, default time, default duration, theme)
+- **Next task:** Phase 4 — streak calculation + completion percentage (provider + Progress screen)
+
+### Settings summary (2026-07-13, session 6)
+- M6+M7 fully verified by user: reminders fired simultaneously on Android phone and Ubuntu ✓.
+- `lib/features/settings/domain/app_settings.dart` — `AppSettings` (defaultDurationDays 21, defaultReminderTime '08:00', notificationsEnabled true, themeMode 'system'); note: import const with `as notifications` prefix (field name shadows it).
+- `lib/features/settings/data/settings_repository.dart` — get (defaults when doc missing) / save (merge) at `users/{uid}/settings/app`.
+- `lib/features/settings/providers.dart` — `settingsRepositoryProvider`, `appSettingsProvider` (FutureProvider; invalidate after save).
+- Settings screen controls (keys): `notifications-enabled` switch, `default-reminder-time` picker, `default-duration` dialog (`default-duration-field`/`default-duration-save`), `theme-mode` dropdown, plus existing `test-notification`, `sign-out`.
+- Wiring: `AdvancedTodoApp` is now a ConsumerWidget → themeMode from settings; `AuthGate` listens to BOTH tasksProvider and appSettingsProvider → `syncReminders()` (disabled ⇒ sync empty list = cancel all; passes `defaultTime`); `ReminderScheduler.sync` gained `{String defaultTime}` param; add-task duration pre-fills from settings.
+- Tests: +7 (settings model/repo unit ×4-in-2-groups, reminders-off cancels, theme applies+persists, duration pre-fill). 46 total passing.
+- Validation: analyze clean, 46 tests pass, Linux release rebuilt (Dart-only change).
+
+### Linux notification investigation (2026-07-13)
+- User reported M7 step 7 failure (no Linux notification). Diagnosis: NOT a code bug. Verified bottom-up: GNOME daemon alive (gdbus GetServerInformation), raw D-Bus Notify accepted, and a probe app (`tool/notify_probe.dart` — kept for future debugging) proved plugin initialize/cancelAll/show/timer-show all work on this machine. Root cause: test-timing — the reminder time set in checklist step 2 had already passed by step 7 (app was also closed/reopened in step 6), so the scheduler correctly armed it for the next day; Linux only fires while the app runs.
+- Hardening added: `ReminderScheduler.showNow()` + Settings tile `test-notification` ("Send test notification") for instant device verification on all platforms; debugPrint diagnostics in sync/fire paths (visible when running from a terminal). +1 widget test (39 total). M6 confirmed: real Android device notification received ✓.
+- NOTE: building with `-t tool/notify_probe.dart` overwrites the debug bundle — rebuild `flutter build linux --debug` afterwards (done).
+
+### Local notifications summary
+- Deps: `flutter_local_notifications 22.0.1` (+linux 8.0.1, +windows 3.1.1), `timezone 0.11.1`. **v22 API note: `initialize(settings: ...)` is a named param.**
+- `lib/services/notifications/reminder_scheduler.dart` — `ReminderScheduler` interface + pure helpers: `parseHhMm`, `stableNotificationId` (FNV-1a, 26-bit, ×10 leaves sub-id room), `nextOccurrence`; `defaultReminderTime = '08:00'`.
+- `lib/services/notifications/local_reminder_scheduler.dart` — platform strategies (Linux plugin has NO zonedSchedule — verified in package source):
+  - Android: `zonedSchedule` + `matchDateTimeComponents.time` daily repeat, `inexactAllowWhileIdle` (avoids exact-alarm permission), survives reboot via boot receiver.
+  - Windows: one-shot toasts for next 7 days per task (ids baseId+i), refreshed each sync.
+  - Linux: in-app `Timer` per task → `show()` via D-Bus, re-arms daily; only fires while app runs (documented limitation).
+  - Times scheduled as absolute UTC instants (DST zones can drift 1h until next sync; IST unaffected). Sync = cancelAll + re-add; skips non-active and ended tasks (endDate < today).
+- Wiring: `reminderSchedulerProvider`; `AuthGate` `ref.listen(tasksProvider)` → requestPermission + sync on initial load and every task change (create → invalidate → re-sync chain works).
+- Android: manifest adds POST_NOTIFICATIONS + RECEIVE_BOOT_COMPLETED + ScheduledNotificationReceiver/BootReceiver; `android/app/build.gradle.kts` adds **core library desugaring** (`isCoreLibraryDesugaringEnabled = true` + `coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")`) — plugin build fails without it.
+- Tests: +6 (parseHhMm, stable ids, nextOccurrence boundaries ×3, reminder re-sync after task creation via `FakeReminderScheduler` in helpers). 38 total passing.
+- Validation: analyze clean, Linux debug build OK, APK debug build OK. NOT yet manually verified on a physical Android device (needs user hardware).
+
+### Today screen summary
+- `lib/core/providers.dart` — `currentDateProvider` moved here from today_screen.dart (daily providers need it; avoids provider→screen import cycle). add_task_screen + tests import updated.
+- `lib/features/daily/providers.dart` — added `todayLogProvider` (`FutureProvider.family<DailyLog?, String>` by taskId, keyed off `currentDateProvider`); invalidate after each write (same pattern as tasksProvider).
+- `lib/features/daily/presentation/today_screen.dart` — rebuilt: lists tasks where `isActiveOn(today)`; per task a Card with `CheckboxListTile` (key `tick-{taskId}`, optimistic toggle with revert+snackbar on failure, subtitle "Day X of N · category") and an inline remark `TextField` (key `remark-{taskId}`, saves on submit AND focus loss, only when text changed, `_savedRemark` dedupe). Entry widget keyed `entry-{taskId}-{dateKey}` so typing survives provider refreshes. Empty state directs to Tasks tab.
+- Tests: +4 (active-only filtering incl. future task hidden; tick→doc `daily_logs/2026-07-13` completed+completedAt, untick clears completedAt; remark persists via keyboard done action; pre-seeded log renders checked + remark shown). Gotcha: fake gateway replaces stored maps on merge writes — re-read `gateway.docs` after each write, don't hold references.
+- Validation: analyze clean, 32 tests pass, Linux debug build OK (Dart-only).
+
+**The FSD core loop now works end to end: add task with duration → tick daily → remark per day → synced to Firestore.**
+
+### Add-task summary
+- `lib/features/tasks/presentation/add_task_screen.dart` — form: title* (validated), description, category, duration* (int ≥1, default 21 via `defaultDurationDays` const), start-date picker (defaults to `currentDateProvider`), optional reminder time picker (stored "HH:mm"). Keys: `task-title`, `task-description`, `task-category`, `task-duration`, `task-start-date`, `task-reminder`, `task-submit`. On create: `ref.invalidate(tasksProvider)` so the polling (Linux) gateway shows the new task immediately, then pops.
+- `lib/features/tasks/presentation/tasks_screen.dart` — real list from `tasksProvider` (title, `start → end · N days · category`, status chip for non-active), FAB key `add-task`, empty state.
+- Tests: +2 (create flow incl. persistence under `users/{uid}/tasks/`; validation errors). Gotcha: gateway also holds the sign-in profile doc — filter by path prefix in assertions.
+- Validation: analyze clean, 28 tests pass, Linux debug build OK (Dart-only).
+
+### Daily log summary (new files)
+- `lib/features/daily/domain/daily_log.dart` — `DailyLog` (date=doc id, completed, remark, completedAt?, updatedAt).
+- `lib/features/daily/data/daily_log_repository.dart` — `setCompleted` (sets/clears completedAt), `setRemark`, `get`, `getAllForTask` (oldest first), `watchForTask`, `watch(taskId,date)`. All writes merge, so checkbox and remark never clobber each other across devices.
+- `lib/features/daily/providers.dart` — `dailyLogRepositoryProvider` (null when signed out).
+- Tests: `test/daily_log_test.dart` (7 tests: round-trip, id fallback, tick/untick, merge safety, skipped-day remark, sorting).
+- Validation: analyze clean, 26 tests pass, Linux debug build OK (Dart-only).
+
+### Task model summary (new files)
+- `lib/core/utils/date_utils.dart` — added `fromDateKey` (UTC midnight, DST-safe) and `addDaysToKey`.
+- `lib/core/utils/id_generator.dart` — `newDocId()` client-side ids (REST gateway has no server-side id allocation); time-prefixed base36.
+- `lib/features/tasks/domain/task.dart` — `Task`, `TaskStatus{active,completed,archived}`; `endDate`, `coversDate`, `isActiveOn`; `toMap`/`fromMap` (DateTime fields — gateways normalize); `copyWith` with `String? Function()?` for nullable fields.
+- `lib/features/tasks/data/task_repository.dart` — create/save (fresh updatedAt)/setStatus (merge)/delete/getById/getAll/watchAll, newest-first sort.
+- `lib/features/tasks/providers.dart` — `taskRepositoryProvider` (null when signed out), `tasksProvider` (StreamProvider).
+- Tests: `test/task_test.dart` (10 tests: date utils, range boundaries, round-trip, repo CRUD vs FakeFirestoreGateway); fakes extracted to `test/helpers/fakes.dart` (shared FakeAuthRepository + FakeFirestoreGateway).
+- Validation: analyze clean, 19 tests pass, Linux debug build OK (Dart-only change, no APK rebuild needed).
+
+### Phase 1 summary (all done, all validated)
+1. Flutter 3.44.6 project at repo root (`advanced_todo`, org `com.sisirradar`, android/windows/linux). SDK at `~/development/flutter` (export PATH each session). flutter doctor all green; Android SDK registered from `~/android-sdk`.
+2. Riverpod 3 (`flutter_riverpod`), layered `lib/` (app/ core/ features/ services/).
+3. Theme + navigation: `lib/app/theme.dart` (seed teal, light+dark, `themeMode: system`); `lib/app/home_shell.dart` — adaptive shell, breakpoint 640px (NavigationRail wide / NavigationBar narrow), tabs Today·Tasks·Progress·Settings via IndexedStack; placeholder screens in `features/{tasks,progress,settings}/presentation/`; sign-out lives in Settings (key `sign-out`).
+4. Firebase config: project `advanced-todo-infinite` (user account pcinfinitesolutions@gmail.com), `lib/firebase_options.dart`, android + windows(web-type) apps. CLIs: firebase-tools (npm), flutterfire_cli (`~/.pub-cache/bin`). **Linux caveat:** no native SDK → REST fallbacks (documented in docs/architecture.md).
+5. Auth: `AuthRepository` (native `firebase_auth` for Android/Windows, REST identitytoolkit for Linux with SharedPreferences session), SignInScreen (keys: email/password/submit/toggle-mode), AuthGate. Live-verified.
+6. Firestore: rules deployed (owner-only `users/{uid}/**`, live-verified incl. 403s); `FirestoreGateway` interface + native impl (persistence on) + REST impl (codec, pagination, merge, 10s polling watch); `ProfileRepository.ensureProfile` creates `users/{uid}` on first sign-in (wired in AuthGate via ref.listen).
+
+Deps: flutter_riverpod, firebase_core, firebase_auth, cloud_firestore, http, shared_preferences.
+Tests: 9 passing (`test/widget_test.dart` — auth flow, profile doc, navigation, adaptive layout; `test/firestore_value_codec_test.dart`). Debug builds verified: Linux + APK.
+
+### Partially done
+- Nothing.
+
+### Blocked
+- Nothing. Manual items M1–M5 all complete; no new manual items open.
+
+### Next step (exact) — Phase 4 start
+1. `export PATH="$HOME/development/flutter/bin:$PATH"`
+2. Streaks + completion %: pure functions in `lib/features/progress/domain/progress_calculator.dart` — `currentStreak(logs, today)` (consecutive completed days ending today-or-yesterday), `completionPercent(task, logs, today)` (completed ÷ elapsed active days, clamp for future start dates); unit-test edge cases (gaps, task started today, ended tasks).
+3. Provider: per-task progress from `DailyLogRepository.getAllForTask` (invalidate alongside todayLogProvider writes — consider a shared invalidation or watch); Progress screen: list each task with streak 🔥, completion bar (LinearProgressIndicator), maybe overall summary card. fl_chart can wait until history timeline/calendar.
+4. Also show streak on Today card subtitle if cheap.
+5. Validate: analyze + test + linux build.
+
+### Assumptions
+- Sign-out moved from Today appbar to Settings (better daily UX; Today stays minimal).
+- IndexedStack keeps tab state; fine at this scale.
+- Theme follows system; a user-facing toggle arrives with the settings doc (Phase 6 / data-model `themeMode`).
+
+### Self-check (Task 3)
+- Output matches goal: adaptive nav + theme, daily flow still 1 tap deep ✓
+- No self-hosting ✓ · Linux build ✓ · Android/Windows preserved (Dart-only change) ✓
+- Consistent with data model: no data changes ✓
+- Resumable: this file + roadmap updated ✓

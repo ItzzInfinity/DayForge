@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "611264529887",
+    "project_id": "advanced-todo-infinite",
+    "storage_bucket": "advanced-todo-infinite.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:611264529887:android:0a31e3f9f698822ca5f06a",
+        "android_client_info": {
+          "package_name": "com.sisirradar.advanced_todo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "611264529887-v7t1rghmcfcdemte779db7p80cqa3539.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBUwa0iTZr9AF-gcaXXCru9alTzkDPo5wI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "611264529887-v7t1rghmcfcdemte779db7p80cqa3539.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
