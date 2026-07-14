@@ -48,7 +48,7 @@ String serializeExport(ExportBundle bundle, ExportFormat format) =>
 /// Full-fidelity dump; also the future import/restore format.
 String exportToJson(ExportBundle bundle) {
   return const JsonEncoder.withIndent('  ').convert({
-    'app': 'advanced_todo',
+    'app': 'dayforge',
     'formatVersion': 1,
     'exportedAt': bundle.exportedAt.toIso8601String(),
     'settings': bundle.settings.toMap(),
@@ -114,7 +114,7 @@ String exportToCsv(ExportBundle bundle) {
 /// Human-readable report: one section per task with a history table.
 String exportToMarkdown(ExportBundle bundle) {
   final buffer = StringBuffer()
-    ..writeln('# Advanced To-Do — data export')
+    ..writeln('# DayForge — data export')
     ..writeln()
     ..writeln('Exported: ${bundle.exportedAt.toIso8601String()}')
     ..writeln();
@@ -156,14 +156,14 @@ String exportToMarkdown(ExportBundle bundle) {
   return buffer.toString();
 }
 
-/// `advanced_todo_export_2026-07-13.json` — date from [exportedAt] so the
+/// `dayforge_export_2026-07-13.json` — date from [exportedAt] so the
 /// name is stable within a day and sortable across days.
 String exportFileName(ExportBundle bundle, ExportFormat format) {
   final d = bundle.exportedAt;
   final date = '${d.year.toString().padLeft(4, '0')}-'
       '${d.month.toString().padLeft(2, '0')}-'
       '${d.day.toString().padLeft(2, '0')}';
-  return 'advanced_todo_export_$date.${format.extension}';
+  return 'dayforge_export_$date.${format.extension}';
 }
 
 Map<String, dynamic> _isoDates(Map<String, dynamic> map) => {

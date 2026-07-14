@@ -1,4 +1,4 @@
-# Advanced To-Do — Daily Progress Tracker
+# DayForge — Daily Progress Tracker
 
 A cross-platform (Android, Windows, Linux), cloud-synced recurring task tracker built with Flutter + Firebase. Add a task once with a duration, tick it daily, leave a short remark each day, get reminders, and watch your streaks.
 

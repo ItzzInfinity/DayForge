@@ -24,13 +24,13 @@ void main() {
   group('reminder payload', () {
     test('round-trips title, body, minutes and taskId', () {
       final encoded = encodeReminderPayload(
-          title: 'Advanced To-Do',
+          title: 'DayForge',
           body: 'Tick "Read" today.',
           minutes: 15,
           taskId: 't1');
       final decoded = decodeReminderPayload(encoded);
       expect(decoded, isNotNull);
-      expect(decoded!.title, 'Advanced To-Do');
+      expect(decoded!.title, 'DayForge');
       expect(decoded.body, 'Tick "Read" today.');
       expect(decoded.minutes, 15);
       expect(decoded.taskId, 't1');

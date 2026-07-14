@@ -949,7 +949,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final export = saver.saved.single;
-      expect(export.fileName, 'advanced_todo_export_2026-07-13.json');
+      expect(export.fileName, 'dayforge_export_2026-07-13.json');
       final parsed = jsonDecode(export.content) as Map<String, dynamic>;
       final task = (parsed['tasks'] as List).single as Map<String, dynamic>;
       expect(task['title'], 'Meditate');
@@ -965,7 +965,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(saver.saved.single.fileName,
-          'advanced_todo_export_2026-07-13.csv');
+          'dayforge_export_2026-07-13.csv');
       expect(saver.saved.single.content,
           contains('t1,Meditate,,active,2026-07-10,2026-07-16,7,2026-07-12'));
 

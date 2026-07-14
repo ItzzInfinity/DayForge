@@ -33,12 +33,12 @@ apk:
 ifeq ($(HOST),windows)
 	$(FLUTTER) build apk --release
 	@if not exist $(DIST) mkdir $(DIST)
-	copy /Y build\app\outputs\flutter-apk\app-release.apk $(DIST)\advanced-todo-$(VERSION).apk
+	copy /Y build\app\outputs\flutter-apk\app-release.apk $(DIST)\dayforge-$(VERSION).apk
 else
 	$(FLUTTER) build apk --release
 	@mkdir -p $(DIST)
-	cp build/app/outputs/flutter-apk/app-release.apk $(DIST)/advanced-todo-$(VERSION).apk
-	@echo "apk: built $(DIST)/advanced-todo-$(VERSION).apk"
+	cp build/app/outputs/flutter-apk/app-release.apk $(DIST)/dayforge-$(VERSION).apk
+	@echo "apk: built $(DIST)/dayforge-$(VERSION).apk"
 endif
 
 linux:
@@ -60,8 +60,8 @@ exe:
 ifeq ($(HOST),windows)
 	$(FLUTTER) build windows --release
 	@if not exist $(DIST) mkdir $(DIST)
-	tar -a -c -f $(DIST)\advanced-todo-$(VERSION)-windows.zip -C build\windows\x64\runner\Release .
-	@echo exe: built $(DIST)\advanced-todo-$(VERSION)-windows.zip (unzip and run advanced_todo.exe)
+	tar -a -c -f $(DIST)\dayforge-$(VERSION)-windows.zip -C build\windows\x64\runner\Release .
+	@echo exe: built $(DIST)\dayforge-$(VERSION)-windows.zip (unzip and run advanced_todo.exe)
 else
 	@echo "exe: skipped — the Windows .exe must be built on a Windows machine"
 	@echo "     (install Flutter there, then run: make exe)."

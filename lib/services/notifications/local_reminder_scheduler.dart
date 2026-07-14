@@ -95,7 +95,7 @@ class LocalReminderScheduler implements ReminderScheduler {
       android: AndroidInitializationSettings('@mipmap/ic_launcher'),
       linux: LinuxInitializationSettings(defaultActionName: 'Open'),
       windows: WindowsInitializationSettings(
-        appName: 'Advanced To-Do',
+        appName: 'DayForge',
         appUserModelId: 'com.sisirradar.advancedTodo',
         guid: '7f8a1e5c-4b2d-4f9a-9c3e-6d5b8a7c2e10',
       ),
@@ -269,7 +269,7 @@ class LocalReminderScheduler implements ReminderScheduler {
       final time = parseHhMm(task.reminderTime ?? defaultTime);
       final baseId = stableNotificationId(task.id) * 10;
       final payload = encodeReminderPayload(
-        title: 'Advanced To-Do',
+        title: 'DayForge',
         body: _bodyFor(task),
         minutes: snoozeMinutes,
         taskId: task.id,
@@ -278,7 +278,7 @@ class LocalReminderScheduler implements ReminderScheduler {
       if (Platform.isAndroid) {
         await _plugin.zonedSchedule(
           id: baseId,
-          title: 'Advanced To-Do',
+          title: 'DayForge',
           body: _bodyFor(task),
           scheduledDate: tz.TZDateTime.from(
             nextOccurrence(now, time.hour, time.minute).toUtc(),
@@ -297,7 +297,7 @@ class LocalReminderScheduler implements ReminderScheduler {
           if (toDateKey(when).compareTo(task.endDate) > 0) break;
           await _plugin.zonedSchedule(
             id: baseId + i,
-            title: 'Advanced To-Do',
+            title: 'DayForge',
             body: _bodyFor(task),
             scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
             notificationDetails: reminderDetails(snoozeMinutes),
@@ -329,7 +329,7 @@ class LocalReminderScheduler implements ReminderScheduler {
       try {
         await _plugin.show(
           id: id,
-          title: 'Advanced To-Do',
+          title: 'DayForge',
           body: _bodyFor(task),
           notificationDetails: reminderDetails(snoozeMinutes),
           payload: payload,

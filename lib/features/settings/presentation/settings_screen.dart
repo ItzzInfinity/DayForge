@@ -226,7 +226,7 @@ class SettingsScreen extends ConsumerWidget {
               final messenger = ScaffoldMessenger.of(context);
               try {
                 await ref.read(reminderSchedulerProvider).showNow(
-                      title: 'Advanced To-Do',
+                      title: 'DayForge',
                       body: 'Test notification — reminders can reach you '
                           'on this device.',
                     );

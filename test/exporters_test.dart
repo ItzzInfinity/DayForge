@@ -55,7 +55,7 @@ void main() {
     test('is valid JSON carrying settings, tasks and logs', () {
       final parsed = jsonDecode(exportToJson(bundle)) as Map<String, dynamic>;
 
-      expect(parsed['app'], 'advanced_todo');
+      expect(parsed['app'], 'dayforge');
       expect(parsed['formatVersion'], 1);
       expect(parsed['exportedAt'], '2026-07-13T10:00:00.000Z');
       expect((parsed['settings'] as Map)['defaultDurationDays'], 30);
@@ -116,8 +116,8 @@ void main() {
 
   test('exportFileName embeds the export date and format extension', () {
     expect(exportFileName(bundle, ExportFormat.json),
-        'advanced_todo_export_2026-07-13.json');
+        'dayforge_export_2026-07-13.json');
     expect(exportFileName(bundle, ExportFormat.markdown),
-        'advanced_todo_export_2026-07-13.md');
+        'dayforge_export_2026-07-13.md');
   });
 }

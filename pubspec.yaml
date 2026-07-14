@@ -56,6 +56,19 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+# App launcher icons (Android mipmaps + Windows .ico) are generated from the
+# square master by `dart run flutter_launcher_icons`. The Linux .desktop icon
+# is installed by tool/build_deb.sh from the same master.
+flutter_launcher_icons:
+  image_path: "assets/icon/dayforge.png"
+  android: true
+  min_sdk_android: 21
+  windows:
+    generate: true
+    image_path: "assets/icon/dayforge.png"
+    icon_size: 256
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -68,10 +81,8 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
-  # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - assets/icon/dayforge.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

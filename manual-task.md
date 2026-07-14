@@ -82,6 +82,20 @@ Fresh artifacts: Linux `./build/linux/x64/release/bundle/advanced_todo`, Android
 - [x] 6. **Snooze (Android):** set a task reminder ~2 min ahead, close the app. When the notification arrives it has a "Snooze 10 min" button — tap it; the notification should return ~10 min later (repeatable). Change Settings → Snooze duration to 5 and confirm the button label updates on the next reminder.
 - [x] 7. **Snooze (Linux, app running):** same — the desktop notification shows a Snooze button; tapping it re-notifies after the set duration while the app stays open.
 
+### M10 — Verify the first-run tutorial (2026-07-14)
+Fresh artifacts in `dist/` after `make all`: Linux `dist/dayforge_1.0.0_amd64.deb` (or run `./build/linux/x64/release/bundle/advanced_todo`), Android `dist/dayforge-1.0.0.apk` (install over the previous release APK; the app id is unchanged so it upgrades in place — no uninstall — and shows the new DayForge name/icon).
+
+The tour is per-device and shows only on first launch, so to re-test you must clear the "seen" flag:
+- **Linux:** delete the prefs file, e.g. `rm ~/.local/share/com.example.advanced_todo/shared_preferences.json` (path may vary by bundle id) — or just try it on a device that hasn't run this build yet.
+- **Android:** app info → Storage → Clear data (this also signs you out; sign back in after), or install on a fresh device.
+
+- [ ] 1. **It appears on first run:** launch the app (signed in). The screen blacks out with a bright circle over the **Today** nav icon and a card titled "Today — your daily checklist".
+- [ ] 2. **NEXT walks the tabs:** tap **NEXT** — the spotlight moves to **Tasks** and the app switches to the Tasks tab; again → **Progress**; again → **Settings**, where the button reads **DONE**.
+- [ ] 3. **DONE ends it:** tap **DONE** — the overlay disappears and you're on the normal app.
+- [ ] 4. **It does not return:** fully close and reopen the app — the tour should NOT show again.
+- [ ] 5. **Skip works:** clear the flag again (step above), relaunch, tap **Skip** on the first card — the tour ends immediately and does not return on the next launch.
+- [ ] 6. **Readability:** the title/body text and the NEXT button are legible against the dark scrim in both light and dark theme.
+
 ## Completed
 - M1 — Create a Firebase project
 - M2 — Enable Email/Password authentication

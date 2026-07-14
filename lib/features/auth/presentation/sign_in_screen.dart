@@ -67,8 +67,15 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Image.asset(
+                    'assets/icon/dayforge.png',
+                    width: 96,
+                    height: 96,
+                    filterQuality: FilterQuality.medium,
+                  ),
+                  const SizedBox(height: 16),
                   Text(
-                    'Advanced To-Do',
+                    'DayForge',
                     style: Theme.of(context).textTheme.headlineMedium,
                     textAlign: TextAlign.center,
                   ),

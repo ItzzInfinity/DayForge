@@ -25,7 +25,7 @@ class AdvancedTodoApp extends ConsumerWidget {
       _ => ThemeMode.system,
     };
     return MaterialApp(
-      title: 'Advanced To-Do',
+      title: 'DayForge',
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: themeMode,
