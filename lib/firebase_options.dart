@@ -50,7 +50,7 @@ class DefaultFirebaseOptions {
   }
 
   static const FirebaseOptions android = FirebaseOptions(
-    apiKey: 'AIzaSyBUwa0iTZr9AF-gcaXXCru9alTzkDPo5wI',
+    apiKey: 'SECRET_KEY',
     appId: '1:611264529887:android:8d7d89635fd75bbda5f06a',
     messagingSenderId: '611264529887',
     projectId: 'advanced-todo-infinite',
@@ -58,7 +58,7 @@ class DefaultFirebaseOptions {
   );
 
   static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBTqT0tFuBzOq3kK2C-d1RR6hsR1cl5Qsw',
+    apiKey: 'SECRET_KEY',
     appId: '1:611264529887:web:824852d3e4efbee0a5f06a',
     messagingSenderId: '611264529887',
     projectId: 'advanced-todo-infinite',
