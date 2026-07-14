@@ -2,7 +2,7 @@
 
 A cross-platform (Android, Windows, Linux), cloud-synced recurring task tracker built with Flutter + Firebase. Add a task once with a duration, tick it daily, leave a short remark each day, get reminders, and watch your streaks.
 
-Spec: [`FSD.md`](FSD.md) (single source of truth). **Status: all six FSD phases complete + feedback round 1 shipped (2026-07-13)** — snooze-able reminders, daily motivational quotes (zenquotes.io + offline list), archive tucked into Settings, completed-tasks-sink + 🎉 banner on Today, readable calendar day numbers, double-tap filter reset.
+Spec: [`FSD.md`](FSD.md) (single source of truth). **Status: all six FSD phases complete + feedback round 1 shipped (2026-07-13)** — snooze-able reminders, daily motivational quotes (bundled 593-quote rotation), archive tucked into Settings, completed-tasks-sink + 🎉 banner on Today, readable calendar day numbers, double-tap filter reset.
 
 ## Project docs
 - [`docs/requirements.md`](docs/requirements.md) — final scope + acceptance-criteria mapping

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -7,19 +9,31 @@ import '../../../core/widgets/error_retry.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../daily/providers.dart';
 import '../../tasks/domain/task.dart';
+import '../../tasks/presentation/add_task_fab.dart';
 import '../../tasks/providers.dart';
 import '../domain/activity_heatmap.dart';
 import '../domain/progress_calculator.dart';
 import 'task_detail_screen.dart';
 
-class ProgressScreen extends ConsumerWidget {
+class ProgressScreen extends ConsumerStatefulWidget {
   const ProgressScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProgressScreen> createState() => _ProgressScreenState();
+}
+
+class _ProgressScreenState extends ConsumerState<ProgressScreen> {
+  /// null = all categories; otherwise only tasks carrying this label are
+  /// shown — heatmap included, so the grid reflects the same slice.
+  String? _categoryFilter;
+
+  @override
+  Widget build(BuildContext context) {
     final tasksAsync = ref.watch(tasksProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Progress')),
+      floatingActionButton: const AddTaskFab(
+          key: Key('add-task-progress'), heroTag: 'fab-progress'),
       body: ContentWidth(
           child: tasksAsync.when(
         data: (tasks) {
@@ -35,22 +49,59 @@ class ProgressScreen extends ConsumerWidget {
               ),
             );
           }
+          final categories = {
+            for (final task in tracked) ...task.categories,
+          }.toList()
+            ..sort();
+          final visible = [
+            for (final task in tracked)
+              if (_categoryFilter == null ||
+                  task.categories.contains(_categoryFilter))
+                task
+          ];
           // Top third of the screen: the GitHub-style activity grid; the
           // per-task cards scroll below it.
           return LayoutBuilder(
             builder: (context, constraints) => Column(
               children: [
+                if (categories.isNotEmpty)
+                  SizedBox(
+                    height: 48,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      children: [
+                        for (final category in categories)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8, top: 8),
+                            child: FilterChip(
+                              key: Key('progress-cat-$category'),
+                              label: Text(category),
+                              selected: _categoryFilter == category,
+                              onSelected: (selected) => setState(() =>
+                                  _categoryFilter =
+                                      selected ? category : null),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
                 SizedBox(
                   height: (constraints.maxHeight / 3).clamp(150.0, 280.0),
-                  child: _ActivityHeatmap(tasks: tracked),
+                  child: _ActivityHeatmap(tasks: visible),
                 ),
                 Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(8),
-                    children: [
-                      for (final task in tracked) _ProgressCard(task: task),
-                    ],
-                  ),
+                  child: visible.isEmpty
+                      ? const Center(
+                          child: Text('No tasks in this category.'))
+                      : ListView(
+                          padding: const EdgeInsets.all(8),
+                          children: [
+                            for (final task in visible)
+                              _ProgressCard(task: task),
+                          ],
+                        ),
                 ),
               ],
             ),
@@ -96,7 +147,6 @@ class _ActivityHeatmap extends ConsumerWidget {
     ]);
     final maxTicks =
         counts.values.fold(0, (max, c) => c > max ? c : max);
-    final weeks = heatmapWeeks(today);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
 
@@ -113,10 +163,21 @@ class _ActivityHeatmap extends ConsumerWidget {
             Expanded(
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  // A slot is one day's total footprint (cell + margins);
-                  // 7 slots must fit the available height exactly.
-                  final slot = (constraints.maxHeight / 7).clamp(8.0, 24.0);
+                  // A slot is one day's total footprint (cell + margins).
+                  // Size it from the height (7 rows must fit exactly), then
+                  // show as many whole weeks as the width takes at that size
+                  // — big cells that fill a desktop card, and on narrow
+                  // phones the cells shrink instead so nothing overflows or
+                  // needs to scroll.
+                  const labelW = 16.0;
+                  final gridW = math.max(0.0, constraints.maxWidth - labelW);
+                  final maxSlot =
+                      (constraints.maxHeight / 7).clamp(8.0, 36.0);
+                  final weekCount =
+                      (gridW / maxSlot).floor().clamp(8, 53);
+                  final slot = math.min(gridW / weekCount, maxSlot);
                   final cell = slot - 2;
+                  final weeks = heatmapWeeks(today, weeks: weekCount);
                   return Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -125,46 +186,33 @@ class _ActivityHeatmap extends ConsumerWidget {
                           for (final label in _weekdayLabels)
                             SizedBox(
                               height: slot,
-                              width: 14,
+                              width: labelW,
                               child: Text(
                                 label,
                                 style: theme.textTheme.labelSmall?.copyWith(
-                                  fontSize: (cell * 0.55).clamp(6.0, 10.0),
+                                  fontSize: (cell * 0.55).clamp(6.0, 11.0),
                                   color: scheme.onSurfaceVariant,
                                 ),
                               ),
                             ),
                         ],
                       ),
-                      Expanded(
-                        // Newest week sits at the right and is what shows
-                        // first; scroll left for older weeks.
-                        child: SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          reverse: true,
-                          child: Row(
-                            children: [
-                              for (final week in weeks)
-                                Column(
-                                  children: [
-                                    for (final dateKey in week)
-                                      dateKey.compareTo(todayKey) > 0
-                                          ? SizedBox(
-                                              width: slot, height: slot)
-                                          : _heatCell(
-                                              scheme,
-                                              cell,
-                                              dateKey,
-                                              counts[dateKey] ?? 0,
-                                              maxTicks,
-                                              dateKey == todayKey,
-                                            ),
-                                  ],
-                                ),
-                            ],
-                          ),
+                      for (final week in weeks)
+                        Column(
+                          children: [
+                            for (final dateKey in week)
+                              dateKey.compareTo(todayKey) > 0
+                                  ? SizedBox(width: slot, height: slot)
+                                  : _heatCell(
+                                      scheme,
+                                      cell,
+                                      dateKey,
+                                      counts[dateKey] ?? 0,
+                                      maxTicks,
+                                      dateKey == todayKey,
+                                    ),
+                          ],
                         ),
-                      ),
                     ],
                   );
                 },

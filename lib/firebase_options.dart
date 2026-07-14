@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBUwa0iTZr9AF-gcaXXCru9alTzkDPo5wI',
-    appId: '1:611264529887:android:0a31e3f9f698822ca5f06a',
+    appId: '1:611264529887:android:8d7d89635fd75bbda5f06a',
     messagingSenderId: '611264529887',
     projectId: 'advanced-todo-infinite',
     storageBucket: 'advanced-todo-infinite.firebasestorage.app',

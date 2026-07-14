@@ -2,7 +2,27 @@
 
 > Resume protocol: read this file first, continue from **Next step**, do not redo completed work, always run the self-check after each task.
 
-## Current state — 2026-07-13 (session 9) — Feedback round 1 COMPLETE (pending M8+M9 user verification)
+## Current state — 2026-07-14 (session 11) — Rebrand + feedback round 3 COMPLETE (pending M11 user verification)
+
+- **Current phase:** All FSD phases + feedback rounds 1–3 done. App is now **DayForge** (icon `assets/icon/dayforge.png`, generated via flutter_launcher_icons; .deb package `dayforge`).
+- **Last completed task:** Feedback round 3 (8 items, see roadmap) + fresh `dist/` artifacts.
+- **Next task:** None queued — wait for M10/M11 verification results. Validation: `flutter analyze && flutter test` (112 tests) then `make all`.
+
+### Session 11 summary — 112 tests passing
+1. **Rebrand:** every display string/window title/notification → DayForge; Android launcher icon (5 mipmaps) + Windows .ico regenerated; export filenames `dayforge_export_*`, JSON `app: dayforge`; sign-in screen shows the logo.
+2. **Identity:** all `sisirradar` → `itzzinfinity`; android applicationId/namespace now `com.itzzinfinity.advanced_todo` — **new Firebase Android app registered** (flutterfire configure; google-services.json + firebase_options.dart regenerated; old client block stripped). Next APK installs as a new app — old one must be uninstalled (M-note in manual-task.md).
+3. **+ FAB everywhere but Settings:** shared `AddTaskFab` (unique heroTags — IndexedStack inflates all tabs) on Today/Tasks/Progress.
+4. **Heatmap:** cell size from height (≤36px), week count from width (8–53 whole columns); no horizontal scroll; portrait fits exactly.
+5. **Change deadline:** Tasks menu → date picker (min = startDate) recomputes durationDays.
+6. **Today app bar:** DayForge top-left, `Today · date` beneath (toolbarHeight 68) — tests still find the date text.
+7. **Quotes:** zenquotes.io fetch **removed entirely** (its ToS requires the attribution the user wanted gone); bundled 593-quote rotation only; `dailyQuoteProvider` now a sync Provider; `quote_service.dart` deleted.
+8. **Categories:** `Task.categories` list (legacy `category` string migrates on read); add-form suggestion chips (Learning/Skill/Habit/Health/Fitness/Work/Personal) + existing-task categories + custom add (key `add-category`, chips `cat-*`); Tasks filter uses contains; Progress has filter chips (`progress-cat-*`) slicing heatmap + cards.
+
+**Gotchas learned this session:**
+- A `Form` inside a lazy `ListView` silently skips validators on scrolled-out fields (they unmount) — the add-task form is now `SingleChildScrollView` + `Column`.
+- `find.byType(Scrollable).last` inside a form picks a TextField's internal scrollable — use `.first` (outer scroll view comes first in DFS order).
+
+## Previous state — 2026-07-13 (session 9) — Feedback round 1 COMPLETE (pending M8+M9 user verification)
 
 - **Current phase:** All FSD phases done (session 8). Session 9 delivered the user's six feedback features.
 - **Last completed task:** Feedback round 1 (all six items) + fresh release builds (Linux bundle + app-release.apk 58 MB) + docs/M9.
@@ -13,7 +33,7 @@
 2. **Archive hidden:** Tasks tab filters out archived tasks before building categories/list; archiving shows a snackbar pointing to the new `ArchiveScreen` (`lib/features/tasks/presentation/archive_screen.dart`, restore key `restore-{id}`, delete key `archive-delete-{id}`), reached via Settings tile key `archived-tasks`.
 3. **Calendar readability:** task-detail month grids wrapped in `ConstrainedBox(maxWidth: 420)`; `_DayCell` uses LayoutBuilder → fontSize `(cellWidth*0.4).clamp(12,22)`, w500.
 4. **Today ordering + congrats:** Today watches `todayLogProvider` per active task, splits pending/completed (completed under header key `completed-header`), `_AllDoneBanner` (key `all-done-banner`, elasticOut TweenAnimationBuilder) when every log loaded & completed.
-5. **Quotes:** `lib/features/quotes/` — domain (`Quote`, `quoteOfTheDay` day-of-year rotation, `encouragementQuote`), data (`local_quotes.dart` **593 distinct quotes**, `quote_service.dart` zenquotes.io `/api/today`, 4s timeout, SharedPreferences day-cache, falls back to bundled), `providers.dart` (`dailyQuoteProvider` keyed off `currentDateProvider`). Today card key `daily-quote` renders bundled quote instantly, upgrades to API quote (shows "· zenquotes.io" attribution). Tick → encouragement snackbar (`✓ quote — author`, clearSnackBars first).
+5. **Quotes:** `lib/features/quotes/` — domain (`Quote`, `quoteOfTheDay` day-of-year rotation, `encouragementQuote`), data (`local_quotes.dart` **593 distinct quotes**), `providers.dart` (`dailyQuoteProvider` keyed off `currentDateProvider`; bundled rotation only — the zenquotes.io fetch was removed 2026-07-14 with its attribution). Tick → encouragement snackbar (`✓ quote — author`, clearSnackBars first).
 6. **Snooze:** `AppSettings.snoozeMinutes` (default 10, dialog keys `snooze-duration`/`snooze-{5,10,15,30,60}`); `ReminderScheduler.sync` gained `snoozeMinutes` param; reminders carry payload (`encodeSnoozePayload` JSON) + `AndroidNotificationAction`/`LinuxNotificationAction` "Snooze N min"; snoozed one-shot lands on the task's reserved `+9` id slot (`snoozeNotificationId`). Foreground handler `_onResponse` (Linux: in-app Timer → show; Android: zonedSchedule now+N); background (app closed, Android) `notificationActionBackground` top-level `@pragma('vm:entry-point')`. Manifest gained `ActionBroadcastReceiver`. Windows toasts: no action support in the plugin — documented limitation.
 
 **Test gotchas learned this session:**
@@ -141,7 +161,7 @@
 - Validation: analyze clean, 19 tests pass, Linux debug build OK (Dart-only change, no APK rebuild needed).
 
 ### Phase 1 summary (all done, all validated)
-1. Flutter 3.44.6 project at repo root (`advanced_todo`, org `com.sisirradar`, android/windows/linux). SDK at `~/development/flutter` (export PATH each session). flutter doctor all green; Android SDK registered from `~/android-sdk`.
+1. Flutter 3.44.6 project at repo root (`advanced_todo`, org `com.itzzinfinity`, android/windows/linux). SDK at `~/development/flutter` (export PATH each session). flutter doctor all green; Android SDK registered from `~/android-sdk`.
 2. Riverpod 3 (`flutter_riverpod`), layered `lib/` (app/ core/ features/ services/).
 3. Theme + navigation: `lib/app/theme.dart` (seed teal, light+dark, `themeMode: system`); `lib/app/home_shell.dart` — adaptive shell, breakpoint 640px (NavigationRail wide / NavigationBar narrow), tabs Today·Tasks·Progress·Settings via IndexedStack; placeholder screens in `features/{tasks,progress,settings}/presentation/`; sign-out lives in Settings (key `sign-out`).
 4. Firebase config: project `advanced-todo-infinite` (user account pcinfinitesolutions@gmail.com), `lib/firebase_options.dart`, android + windows(web-type) apps. CLIs: firebase-tools (npm), flutterfire_cli (`~/.pub-cache/bin`). **Linux caveat:** no native SDK → REST fallbacks (documented in docs/architecture.md).

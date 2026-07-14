@@ -131,6 +131,9 @@ void main() {
 
     await tester.enterText(find.byKey(const Key('task-title')), 'Meditate');
     await tester.enterText(find.byKey(const Key('task-duration')), '7');
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('task-submit')), 200,
+        scrollable: find.byType(Scrollable).first);
     await tester.tap(find.byKey(const Key('task-submit')));
     await tester.pumpAndSettle();
 
@@ -165,6 +168,9 @@ void main() {
     await tester.tap(find.byKey(const Key('add-task')));
     await tester.pumpAndSettle();
     await tester.enterText(find.byKey(const Key('task-title')), 'Stretch');
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('task-submit')), 200,
+        scrollable: find.byType(Scrollable).first);
     await tester.tap(find.byKey(const Key('task-submit')));
     await tester.pumpAndSettle();
 
@@ -339,6 +345,9 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byKey(const Key('task-duration')), '0');
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('task-submit')), 200,
+        scrollable: find.byType(Scrollable).first);
     await tester.tap(find.byKey(const Key('task-submit')));
     await tester.pumpAndSettle();
 
@@ -489,6 +498,35 @@ void main() {
       );
       expect(emptyTooltip.message, '0 done · 2026-07-11');
       expect(find.byKey(const ValueKey('heat-2026-07-14')), findsNothing);
+    });
+
+    testWidgets('heatmap adapts: no overflow in portrait, wider on desktop',
+        (tester) async {
+      await pumpSignedIn(tester);
+
+      // One heat cell exists per rendered (non-future) day, so counting
+      // them measures how many week columns the grid chose to show.
+      int cellCount() => tester
+          .widgetList(find.byWidgetPredicate((w) =>
+              w.key is ValueKey<String> &&
+              (w.key as ValueKey<String>).value.startsWith('heat-')))
+          .length;
+
+      // Mobile portrait: everything must fit — a RenderFlex overflow here
+      // fails the test with an exception.
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      await tester.tap(find.text('Progress'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('activity-heatmap')), findsOneWidget);
+      expect(find.byKey(const ValueKey('heat-2026-07-13')), findsOneWidget);
+      final narrowCells = cellCount();
+
+      // Desktop width: the grid fills the card with more week columns.
+      tester.view.physicalSize = const Size(1280, 800);
+      await tester.pumpAndSettle();
+      expect(cellCount(), greaterThan(narrowCells));
     });
 
     testWidgets('task detail shows the calendar and remark history',
@@ -717,6 +755,88 @@ void main() {
       expect(gateway.docs['users/u/tasks/t1']!['reminderTime'], isNull);
     });
 
+    testWidgets(
+        'new task takes suggested and custom categories; they persist',
+        (tester) async {
+      await pumpTasksTab(tester);
+
+      await tester.tap(find.byKey(const Key('add-task')));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byKey(const Key('task-title')), 'Guitar');
+
+      // One suggested chip + one custom category.
+      await tester.tap(find.byKey(const Key('cat-Health')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const Key('task-category')), 'Music');
+      await tester.tap(find.byKey(const Key('add-category')));
+      await tester.pumpAndSettle();
+      // The custom chip appears selected.
+      expect(find.byKey(const Key('cat-Music')), findsOneWidget);
+
+      await tester.scrollUntilVisible(
+          find.byKey(const Key('task-submit')), 200,
+          scrollable: find.byType(Scrollable).first);
+      await tester.tap(find.byKey(const Key('task-submit')));
+      await tester.pumpAndSettle();
+
+      final doc = gateway.docs.entries
+          .singleWhere((e) =>
+              e.key.startsWith('users/u/tasks/') &&
+              e.value['title'] == 'Guitar')
+          .value;
+      expect(doc['categories'], ['Health', 'Music']);
+      // The new categories join the Tasks filter chips.
+      expect(find.byKey(const Key('filter-cat-Music')), findsOneWidget);
+    });
+
+    testWidgets('Progress filters tasks by category', (tester) async {
+      await pumpTasksTab(tester);
+      await tester.tap(find.text('Progress'));
+      await tester.pumpAndSettle();
+
+      // Both active tasks show, with their (migrated) category chips.
+      expect(find.byKey(const ValueKey('progress-card-t1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('progress-card-t3')), findsOneWidget);
+
+      await tester.tap(find.byKey(const Key('progress-cat-health')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('progress-card-t1')), findsOneWidget);
+      expect(find.byKey(const ValueKey('progress-card-t3')), findsNothing);
+
+      // Deselecting the chip restores everything.
+      await tester.tap(find.byKey(const Key('progress-cat-health')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const ValueKey('progress-card-t3')), findsOneWidget);
+    });
+
+    testWidgets('Change deadline recomputes the duration from the start date',
+        (tester) async {
+      await pumpTasksTab(tester);
+
+      // t1 runs 2026-07-13 + 7 days → ends 2026-07-19.
+      Finder inTile(String text) => find.descendant(
+            of: find.byKey(const ValueKey('task-tile-t1')),
+            matching: find.textContaining(text),
+          );
+      expect(inTile('→ 2026-07-19 · 7 days'), findsOneWidget);
+
+      await tester.tap(find.byKey(const ValueKey('task-menu-t1')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change deadline'));
+      await tester.pumpAndSettle();
+
+      // Date picker opens on the current deadline; move it to July 25.
+      await tester.tap(find.text('25'));
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(gateway.docs['users/u/tasks/t1']!['durationDays'], 13);
+      expect(inTile('→ 2026-07-25 · 13 days'), findsOneWidget);
+      expect(find.textContaining('Deadline moved to 2026-07-25'),
+          findsOneWidget);
+    });
+
     testWidgets('Settings → Archived tasks lists, restores and deletes',
         (tester) async {
       await pumpTasksTab(tester);
@@ -810,7 +930,10 @@ void main() {
       await tester.tap(find.byKey(const Key('onboarding-add-task')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byKey(const Key('task-title')), 'Stretch');
-      await tester.tap(find.byKey(const Key('task-submit')));
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('task-submit')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.byKey(const Key('task-submit')));
       await tester.pumpAndSettle();
 
       // Back on Today: the new task is active immediately, onboarding gone.
@@ -1002,6 +1125,35 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(NavigationBar), findsOneWidget);
     expect(find.byType(NavigationRail), findsNothing);
+  });
+
+  testWidgets('the + button is on every tab except Settings', (tester) async {
+    final repo = FakeAuthRepository(
+        initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    await tester.pumpWidget(appWith(repo));
+    await tester.pumpAndSettle();
+
+    // Today
+    expect(find.byKey(const Key('add-task-today')), findsOneWidget);
+    // Tasks
+    await tester.tap(find.byIcon(Icons.checklist_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('add-task')), findsOneWidget);
+    // Progress
+    await tester.tap(find.byIcon(Icons.insights_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('add-task-progress')), findsOneWidget);
+    // Settings: no + button (all other tabs are offstage in the stack).
+    await tester.tap(find.byIcon(Icons.settings_outlined));
+    await tester.pumpAndSettle();
+    expect(find.byType(FloatingActionButton), findsNothing);
+
+    // The Today FAB opens the add-task form.
+    await tester.tap(find.byIcon(Icons.today_outlined));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-task-today')));
+    await tester.pumpAndSettle();
+    expect(find.text('New task'), findsOneWidget);
   });
 
   testWidgets('invalid form input is rejected before hitting the repo',

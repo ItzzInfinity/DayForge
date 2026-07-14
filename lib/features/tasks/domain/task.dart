@@ -8,7 +8,7 @@ class Task {
     required this.id,
     required this.title,
     this.description,
-    this.category,
+    this.categories = const [],
     required this.startDate,
     required this.durationDays,
     this.reminderTime,
@@ -20,7 +20,14 @@ class Task {
   final String id;
   final String title;
   final String? description;
-  final String? category;
+
+  /// Zero or more user-facing labels ("Health", "Learning", …). Older docs
+  /// stored a single `category` string — [Task.fromMap] migrates it.
+  final List<String> categories;
+
+  /// Display form of [categories]; null when the task has none.
+  String? get categoryLabel =>
+      categories.isEmpty ? null : categories.join(', ');
 
   /// `YYYY-MM-DD` local date key of the first active day.
   final String startDate;
@@ -52,7 +59,7 @@ class Task {
   Map<String, dynamic> toMap() => {
         'title': title,
         'description': description,
-        'category': category,
+        'categories': categories,
         'startDate': startDate,
         'durationDays': durationDays,
         'reminderTime': reminderTime,
@@ -62,11 +69,17 @@ class Task {
       };
 
   factory Task.fromMap(String id, Map<String, dynamic> map) {
+    // Docs written before multi-category support hold a single `category`
+    // string; treat it as a one-element list.
+    final legacy = map['category'] as String?;
     return Task(
       id: id,
       title: map['title'] as String? ?? '',
       description: map['description'] as String?,
-      category: map['category'] as String?,
+      categories: switch (map['categories']) {
+        final List list => [for (final c in list) c as String],
+        _ => [if (legacy != null && legacy.isNotEmpty) legacy],
+      },
       startDate: map['startDate'] as String,
       durationDays: map['durationDays'] as int,
       reminderTime: map['reminderTime'] as String?,
@@ -80,7 +93,7 @@ class Task {
   Task copyWith({
     String? title,
     String? Function()? description,
-    String? Function()? category,
+    List<String>? categories,
     String? startDate,
     int? durationDays,
     String? Function()? reminderTime,
@@ -91,7 +104,7 @@ class Task {
       id: id,
       title: title ?? this.title,
       description: description != null ? description() : this.description,
-      category: category != null ? category() : this.category,
+      categories: categories ?? this.categories,
       startDate: startDate ?? this.startDate,
       durationDays: durationDays ?? this.durationDays,
       reminderTime: reminderTime != null ? reminderTime() : this.reminderTime,

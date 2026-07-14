@@ -8,6 +8,7 @@ import '../../../core/widgets/error_retry.dart';
 import '../../quotes/domain/quotes.dart';
 import '../../quotes/providers.dart';
 import '../../tasks/domain/task.dart';
+import '../../tasks/presentation/add_task_fab.dart';
 import '../../tasks/presentation/add_task_screen.dart';
 import '../../tasks/providers.dart';
 import '../domain/daily_log.dart';
@@ -31,8 +32,27 @@ class _TodayScreenState extends ConsumerState<TodayScreen> {
     final dateKey = toDateKey(date);
     final tasksAsync = ref.watch(tasksProvider);
 
+    final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text('Today · $dateKey')),
+      // Brand top-left: the app name with today's date tucked under it.
+      appBar: AppBar(
+        toolbarHeight: 68,
+        centerTitle: false,
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('DayForge', style: theme.textTheme.titleLarge),
+            Text(
+              'Today · $dateKey',
+              style: theme.textTheme.labelMedium
+                  ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton:
+          const AddTaskFab(key: Key('add-task-today'), heroTag: 'fab-today'),
       body: ContentWidth(
           child: tasksAsync.when(
         data: (tasks) {
@@ -179,16 +199,13 @@ class _OnboardingEmpty extends StatelessWidget {
   }
 }
 
-/// A fresh motivational quote each day: the bundled rotation renders
-/// instantly, then upgrades to the zenquotes.io quote of the day (with
-/// visible attribution) once the fetch completes.
+/// A fresh motivational quote each day from the bundled rotation.
 class _DailyQuoteCard extends ConsumerWidget {
   const _DailyQuoteCard();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final date = ref.watch(currentDateProvider);
-    final quote = ref.watch(dailyQuoteProvider).value ?? quoteOfTheDay(date);
+    final quote = ref.watch(dailyQuoteProvider);
     final theme = Theme.of(context);
     return Padding(
       key: const Key('daily-quote'),
@@ -201,12 +218,11 @@ class _DailyQuoteCard extends ConsumerWidget {
             style: theme.textTheme.bodyMedium
                 ?.copyWith(fontStyle: FontStyle.italic),
           ),
-          if (quote.author.isNotEmpty || quote.fromApi)
+          if (quote.author.isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text(
-                '— ${quote.author.isEmpty ? 'Unknown' : quote.author}'
-                '${quote.fromApi ? ' · zenquotes.io' : ''}',
+                '— ${quote.author}',
                 textAlign: TextAlign.right,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
@@ -441,7 +457,7 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
           title: Text(widget.task.title),
           subtitle: Text(
             'Day $_dayNumber of ${widget.task.durationDays}'
-            '${widget.task.category != null ? ' · ${widget.task.category}' : ''}',
+            '${widget.task.categoryLabel != null ? ' · ${widget.task.categoryLabel}' : ''}',
           ),
         ),
         Padding(

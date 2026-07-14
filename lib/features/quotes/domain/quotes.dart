@@ -3,14 +3,11 @@ import 'dart:math';
 import '../data/local_quotes.dart';
 
 /// A motivational quote. [author] may be empty (proverbs / unattributed).
-/// [fromApi] marks quotes fetched from zenquotes.io, whose free tier asks
-/// for visible attribution.
 class Quote {
-  const Quote(this.text, [this.author = '', this.fromApi = false]);
+  const Quote(this.text, [this.author = '']);
 
   final String text;
   final String author;
-  final bool fromApi;
 }
 
 /// 1-based day of the year for [date] (1..366).

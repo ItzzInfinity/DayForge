@@ -59,7 +59,7 @@ Priority: optional
 Architecture: $ARCH
 Installed-Size: $INSTALLED_SIZE
 Depends: libgtk-3-0, libstdc++6
-Maintainer: Sisir Radar <anjan@sisirradar.com>
+Maintainer: ItzzInfinity <prasadanjan25@gmail.com>
 Description: DayForge — recurring daily task tracker
  Forge daily habits: track recurring daily tasks with per-day remarks,
  streaks, progress calendars, reminders and Firebase cloud sync.

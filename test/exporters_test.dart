@@ -13,7 +13,7 @@ void main() {
     id: 't1',
     title: 'Meditate',
     description: 'Ten minutes',
-    category: 'Health',
+    categories: const ['Health', 'Habit'],
     startDate: '2026-07-01',
     durationDays: 21,
     reminderTime: '07:30',
@@ -80,9 +80,9 @@ void main() {
       final lines = exportToCsv(bundle).split('\r\n');
 
       expect(lines, hasLength(4)); // header + 2 logs + 1 log-less task
-      expect(lines.first, startsWith('taskId,title,category,status'));
+      expect(lines.first, startsWith('taskId,title,categories,status'));
       expect(lines[1],
-          startsWith('t1,Meditate,Health,active,2026-07-01,2026-07-21,21,'));
+          startsWith('t1,Meditate,"Health, Habit",active,2026-07-01,2026-07-21,21,'));
       expect(lines[1], contains('2026-07-01,true,2026-07-01T07:35:00.000Z'));
       expect(lines[2], contains(',false,,'));
       // Comma and quotes in the title must be escaped, log columns empty.
@@ -97,7 +97,7 @@ void main() {
 
       expect(md, contains('## Meditate'));
       expect(md, contains('- Runs: 2026-07-01 → 2026-07-21 (21 days)'));
-      expect(md, contains('- Category: Health'));
+      expect(md, contains('- Categories: Health, Habit'));
       expect(md, contains('| 2026-07-01 | ✓ | Felt calm |'));
       expect(md, contains(r'| 2026-07-02 | ○ | Skipped, travel \| busy |'));
       expect(md, contains('## Read, "deeply"'));

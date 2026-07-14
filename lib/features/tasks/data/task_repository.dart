@@ -16,7 +16,7 @@ class TaskRepository {
   Future<Task> create({
     required String title,
     String? description,
-    String? category,
+    List<String> categories = const [],
     required String startDate,
     required int durationDays,
     String? reminderTime,
@@ -26,7 +26,7 @@ class TaskRepository {
       id: newDocId(),
       title: title,
       description: description,
-      category: category,
+      categories: categories,
       startDate: startDate,
       durationDays: durationDays,
       reminderTime: reminderTime,

@@ -57,6 +57,24 @@ void main() {
       final map = task.toMap()..['status'] = 'garbage';
       expect(Task.fromMap('x', map).status, TaskStatus.active);
     });
+
+    test('categories round-trip and label joins them', () {
+      final tagged = task.copyWith(categories: ['Health', 'Habit']);
+      expect(tagged.categoryLabel, 'Health, Habit');
+      final restored = Task.fromMap(tagged.id, tagged.toMap());
+      expect(restored.categories, ['Health', 'Habit']);
+      expect(task.categoryLabel, isNull); // no categories → no label
+    });
+
+    test('legacy single-category docs migrate to a one-element list', () {
+      final map = task.toMap()
+        ..remove('categories')
+        ..['category'] = 'health';
+      expect(Task.fromMap('x', map).categories, ['health']);
+      // Legacy null/empty category → no categories.
+      map['category'] = null;
+      expect(Task.fromMap('x', map).categories, isEmpty);
+    });
   });
 
   group('TaskRepository', () {

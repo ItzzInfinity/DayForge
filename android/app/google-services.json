@@ -7,9 +7,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:611264529887:android:0a31e3f9f698822ca5f06a",
+        "mobilesdk_app_id": "1:611264529887:android:8d7d89635fd75bbda5f06a",
         "android_client_info": {
-          "package_name": "com.sisirradar.advanced_todo"
+          "package_name": "com.itzzinfinity.advanced_todo"
         }
       },
       "oauth_client": [

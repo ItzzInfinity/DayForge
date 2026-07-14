@@ -1,4 +1,4 @@
-package com.sisirradar.advanced_todo
+package com.itzzinfinity.advanced_todo
 
 import io.flutter.embedding.android.FlutterActivity
 

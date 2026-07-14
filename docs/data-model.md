@@ -23,7 +23,7 @@ All user data lives under `users/{uid}` so security rules are trivial (`request.
 |---|---|---|
 | title | string | |
 | description | string | optional |
-| category | string | optional, for filtering |
+| categories | array&lt;string&gt; | zero or more labels, for filtering; legacy docs may instead hold a single `category` string, migrated on read |
 | startDate | string | "YYYY-MM-DD" (local date, avoids TZ drift) |
 | durationDays | int | task runs startDate .. startDate+durationDays-1 |
 | reminderTime | string | "HH:mm", null = use global default |

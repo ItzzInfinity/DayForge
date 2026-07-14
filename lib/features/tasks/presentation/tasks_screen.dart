@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/date_utils.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../core/widgets/error_retry.dart';
 import '../../../services/notifications/reminder_scheduler.dart'
@@ -9,7 +10,7 @@ import '../../progress/presentation/task_detail_screen.dart';
 import '../../settings/providers.dart';
 import '../domain/task.dart';
 import '../providers.dart';
-import 'add_task_screen.dart';
+import 'add_task_fab.dart';
 
 class TasksScreen extends ConsumerStatefulWidget {
   const TasksScreen({super.key});
@@ -28,7 +29,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     return [
       for (final task in tasks)
         if ((_statusFilter == null || task.status == _statusFilter) &&
-            (_categoryFilter == null || task.category == _categoryFilter) &&
+            (_categoryFilter == null ||
+                task.categories.contains(_categoryFilter)) &&
             (query.isEmpty ||
                 task.title.toLowerCase().contains(query) ||
                 (task.description?.toLowerCase().contains(query) ?? false)))
@@ -41,14 +43,8 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
     final tasksAsync = ref.watch(tasksProvider);
     return Scaffold(
       appBar: AppBar(title: const Text('Tasks')),
-      floatingActionButton: FloatingActionButton(
-        key: const Key('add-task'),
-        tooltip: 'Add task',
-        onPressed: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(builder: (_) => const AddTaskScreen()),
-        ),
-        child: const Icon(Icons.add),
-      ),
+      floatingActionButton:
+          const AddTaskFab(key: Key('add-task'), heroTag: 'fab-tasks'),
       body: ContentWidth(
           child: tasksAsync.when(
         data: (allTasks) {
@@ -64,8 +60,7 @@ class _TasksScreenState extends ConsumerState<TasksScreen> {
             );
           }
           final categories = {
-            for (final t in tasks)
-              if (t.category != null) t.category!
+            for (final t in tasks) ...t.categories,
           }.toList()
             ..sort();
           final visible = _filtered(tasks);
@@ -239,6 +234,37 @@ class _TaskTile extends ConsumerWidget {
     ));
   }
 
+  /// Deadline = last active day. Picking a new one recomputes durationDays
+  /// from the (unchanged) start date; streaks, calendars and reminders all
+  /// derive from the task doc, so they follow automatically.
+  Future<void> _changeDeadline(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final start = fromDateKey(task.startDate);
+    final current = fromDateKey(task.endDate);
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: start,
+      lastDate: start.add(const Duration(days: 5 * 365)),
+      helpText: 'Last day of "${task.title}"',
+    );
+    if (picked == null) return;
+    final newDuration = fromDateKey(toDateKey(picked))
+            .difference(fromDateKey(task.startDate))
+            .inDays +
+        1;
+    if (newDuration == task.durationDays) return;
+
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    final saved = await repo.save(task.copyWith(durationDays: newDuration));
+    ref.invalidate(tasksProvider);
+    messenger.showSnackBar(SnackBar(
+      content: Text(
+          'Deadline moved to ${saved.endDate} (${saved.durationDays} days).'),
+    ));
+  }
+
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -271,7 +297,7 @@ class _TaskTile extends ConsumerWidget {
       title: Text(task.title),
       subtitle: Text(
         '${task.startDate} → ${task.endDate} · ${task.durationDays} days'
-        '${task.category != null ? ' · ${task.category}' : ''}',
+        '${task.categoryLabel != null ? ' · ${task.categoryLabel}' : ''}',
       ),
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute<void>(
@@ -292,6 +318,7 @@ class _TaskTile extends ConsumerWidget {
               'complete' => _setStatus(context, ref, TaskStatus.completed),
               'reactivate' => _setStatus(context, ref, TaskStatus.active),
               'reminder' => _changeReminder(context, ref),
+              'deadline' => _changeDeadline(context, ref),
               'archive' => _setStatus(context, ref, TaskStatus.archived),
               'delete' => _delete(context, ref),
               _ => Future<void>.value(),
@@ -307,11 +334,16 @@ class _TaskTile extends ConsumerWidget {
                   value: 'reactivate',
                   child: Text('Reactivate'),
                 ),
-              if (task.status == TaskStatus.active)
-                const PopupMenuItem(
+              if (task.status == TaskStatus.active) ...const [
+                PopupMenuItem(
                   value: 'reminder',
                   child: Text('Change reminder time'),
                 ),
+                PopupMenuItem(
+                  value: 'deadline',
+                  child: Text('Change deadline'),
+                ),
+              ],
               const PopupMenuItem(value: 'archive', child: Text('Archive')),
               const PopupMenuItem(value: 'delete', child: Text('Delete')),
             ],

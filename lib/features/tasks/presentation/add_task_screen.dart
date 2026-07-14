@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../settings/providers.dart';
+import '../domain/task.dart';
 import '../providers.dart';
 
 class AddTaskScreen extends ConsumerStatefulWidget {
@@ -14,10 +15,23 @@ class AddTaskScreen extends ConsumerStatefulWidget {
 }
 
 class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
+  /// Offered on every new task; the user can add their own beside these.
+  static const suggestedCategories = [
+    'Learning',
+    'Skill',
+    'Habit',
+    'Health',
+    'Fitness',
+    'Work',
+    'Personal',
+  ];
+
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _description = TextEditingController();
   final _category = TextEditingController();
+  final Set<String> _selectedCategories = {};
+  final List<String> _customCategories = [];
   late final _duration = TextEditingController(
     text: (ref.read(appSettingsProvider).value?.defaultDurationDays ?? 21)
         .toString(),
@@ -38,6 +52,39 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   String? _trimmedOrNull(TextEditingController controller) {
     final text = controller.text.trim();
     return text.isEmpty ? null : text;
+  }
+
+  /// Everything the chips row offers: the built-in suggestions, categories
+  /// already used on the user's other tasks, and this form's custom adds.
+  List<String> _allCategories() {
+    final existing = {
+      for (final task in ref.read(tasksProvider).value ?? const <Task>[])
+        ...task.categories,
+    };
+    final seen = <String>{};
+    return [
+      for (final c in [
+        ...suggestedCategories,
+        ...existing.toList()..sort(),
+        ..._customCategories,
+      ])
+        if (seen.add(c)) c,
+    ];
+  }
+
+  void _addCustomCategory({bool select = true}) {
+    final text = _category.text.trim();
+    if (text.isEmpty) return;
+    // Match an existing chip case-insensitively instead of duplicating it.
+    final existing = _allCategories().where(
+      (c) => c.toLowerCase() == text.toLowerCase(),
+    );
+    final name = existing.isEmpty ? text : existing.first;
+    setState(() {
+      if (existing.isEmpty) _customCategories.add(name);
+      if (select) _selectedCategories.add(name);
+      _category.clear();
+    });
   }
 
   Future<void> _pickStartDate() async {
@@ -64,16 +111,22 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     if (repo == null) return;
     setState(() => _busy = true);
     try {
+      // A typed-but-not-added custom category still counts: pressing Create
+      // without hitting "+" should not silently drop it.
+      _addCustomCategory(select: true);
       await repo.create(
         title: _title.text.trim(),
         description: _trimmedOrNull(_description),
-        category: _trimmedOrNull(_category),
+        categories: [
+          for (final c in _allCategories())
+            if (_selectedCategories.contains(c)) c,
+        ],
         startDate: toDateKey(_startDate),
         durationDays: int.parse(_duration.text.trim()),
         reminderTime: _reminder == null
             ? null
             : '${_reminder!.hour.toString().padLeft(2, '0')}:'
-                '${_reminder!.minute.toString().padLeft(2, '0')}',
+                  '${_reminder!.minute.toString().padLeft(2, '0')}',
       );
       // The task list stream re-reads on resubscribe; refresh it now so the
       // new task shows immediately even on the polling (Linux) gateway.
@@ -98,90 +151,131 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         child: Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 560),
-            child: ListView(
+            // Not a lazy ListView: a Form must keep every field mounted, or
+            // validators on fields scrolled out of view silently stop
+            // running.
+            child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
-              children: [
-                TextFormField(
-                  key: const Key('task-title'),
-                  controller: _title,
-                  decoration: const InputDecoration(
-                    labelText: 'Title *',
-                    border: OutlineInputBorder(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextFormField(
+                    key: const Key('task-title'),
+                    controller: _title,
+                    decoration: const InputDecoration(
+                      labelText: 'Title *',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Enter a title'
+                        : null,
                   ),
-                  validator: (v) =>
-                      (v == null || v.trim().isEmpty) ? 'Enter a title' : null,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  key: const Key('task-description'),
-                  controller: _description,
-                  decoration: const InputDecoration(
-                    labelText: 'Description',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    key: const Key('task-description'),
+                    controller: _description,
+                    decoration: const InputDecoration(
+                      labelText: 'Description',
+                      border: OutlineInputBorder(),
+                    ),
+                    maxLines: 2,
                   ),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  key: const Key('task-category'),
-                  controller: _category,
-                  decoration: const InputDecoration(
-                    labelText: 'Category',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Categories',
+                      helperText: 'Pick one or more, or add your own below',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        for (final category in _allCategories())
+                          FilterChip(
+                            key: Key('cat-$category'),
+                            label: Text(category),
+                            selected: _selectedCategories.contains(category),
+                            onSelected: (selected) => setState(
+                              () => selected
+                                  ? _selectedCategories.add(category)
+                                  : _selectedCategories.remove(category),
+                            ),
+                            visualDensity: VisualDensity.compact,
+                          ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  key: const Key('task-duration'),
-                  controller: _duration,
-                  decoration: const InputDecoration(
-                    labelText: 'Duration (days) *',
-                    helperText: 'How many days this task should continue',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    key: const Key('task-category'),
+                    controller: _category,
+                    decoration: InputDecoration(
+                      labelText: 'Add your own category',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: IconButton(
+                        key: const Key('add-category'),
+                        icon: const Icon(Icons.add),
+                        tooltip: 'Add category',
+                        onPressed: _addCustomCategory,
+                      ),
+                    ),
+                    onFieldSubmitted: (_) => _addCustomCategory(),
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: (v) {
-                    final days = int.tryParse((v ?? '').trim());
-                    if (days == null || days < 1) {
-                      return 'Enter a number of days (1 or more)';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  key: const Key('task-start-date'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.calendar_today),
-                  title: const Text('Start date'),
-                  subtitle: Text(toDateKey(_startDate)),
-                  onTap: _pickStartDate,
-                ),
-                ListTile(
-                  key: const Key('task-reminder'),
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.alarm),
-                  title: const Text('Reminder time'),
-                  subtitle: Text(
-                    _reminder == null
-                        ? 'None (uses the global default once reminders ship)'
-                        : _reminder!.format(context),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    key: const Key('task-duration'),
+                    controller: _duration,
+                    decoration: const InputDecoration(
+                      labelText: 'Duration (days) *',
+                      helperText: 'How many days this task should continue',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (v) {
+                      final days = int.tryParse((v ?? '').trim());
+                      if (days == null || days < 1) {
+                        return 'Enter a number of days (1 or more)';
+                      }
+                      return null;
+                    },
                   ),
-                  onTap: _pickReminder,
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  key: const Key('task-submit'),
-                  onPressed: _busy ? null : _submit,
-                  child: _busy
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Create task'),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  ListTile(
+                    key: const Key('task-start-date'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.calendar_today),
+                    title: const Text('Start date'),
+                    subtitle: Text(toDateKey(_startDate)),
+                    onTap: _pickStartDate,
+                  ),
+                  ListTile(
+                    key: const Key('task-reminder'),
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.alarm),
+                    title: const Text('Reminder time'),
+                    subtitle: Text(
+                      _reminder == null
+                          ? 'None (uses the global default once reminders ship)'
+                          : _reminder!.format(context),
+                    ),
+                    onTap: _pickReminder,
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    key: const Key('task-submit'),
+                    onPressed: _busy ? null : _submit,
+                    child: _busy
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Create task'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),

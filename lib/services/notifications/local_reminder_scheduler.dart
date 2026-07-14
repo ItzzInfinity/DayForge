@@ -96,7 +96,7 @@ class LocalReminderScheduler implements ReminderScheduler {
       linux: LinuxInitializationSettings(defaultActionName: 'Open'),
       windows: WindowsInitializationSettings(
         appName: 'DayForge',
-        appUserModelId: 'com.sisirradar.advancedTodo',
+        appUserModelId: 'com.itzzinfinity.advancedTodo',
         guid: '7f8a1e5c-4b2d-4f9a-9c3e-6d5b8a7c2e10',
       ),
     );

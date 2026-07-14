@@ -73,7 +73,7 @@ class ArchiveScreen extends ConsumerWidget {
                 subtitle: Text(
                   '${task.startDate} → ${task.endDate} · '
                   '${task.durationDays} days'
-                  '${task.category != null ? ' · ${task.category}' : ''}',
+                  '${task.categoryLabel != null ? ' · ${task.categoryLabel}' : ''}',
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,

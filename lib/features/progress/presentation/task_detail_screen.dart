@@ -71,7 +71,7 @@ class _DetailBody extends StatelessWidget {
         ],
         Text(
           '${task.startDate} → ${task.endDate} · ${task.durationDays} days'
-          '${task.category != null ? ' · ${task.category}' : ''}',
+          '${task.categoryLabel != null ? ' · ${task.categoryLabel}' : ''}',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 8),

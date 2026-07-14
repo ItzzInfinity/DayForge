@@ -73,7 +73,7 @@ String exportToCsv(ExportBundle bundle) {
   const header = [
     'taskId',
     'title',
-    'category',
+    'categories',
     'status',
     'startDate',
     'endDate',
@@ -89,7 +89,7 @@ String exportToCsv(ExportBundle bundle) {
     final taskCells = [
       task.id,
       task.title,
-      task.category ?? '',
+      task.categoryLabel ?? '',
       task.status.name,
       task.startDate,
       task.endDate,
@@ -135,7 +135,9 @@ String exportToMarkdown(ExportBundle bundle) {
       ..writeln('- Status: ${task.status.name}')
       ..writeln('- Runs: ${task.startDate} → ${task.endDate} '
           '(${task.durationDays} days)');
-    if (task.category != null) buffer.writeln('- Category: ${task.category}');
+    if (task.categoryLabel != null) {
+      buffer.writeln('- Categories: ${task.categoryLabel}');
+    }
     if (task.reminderTime != null) {
       buffer.writeln('- Reminder: ${task.reminderTime}');
     }

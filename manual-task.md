@@ -96,6 +96,24 @@ The tour is per-device and shows only on first launch, so to re-test you must cl
 - [x] 5. **Skip works:** clear the flag again (step above), relaunch, tap **Skip** on the first card — the tour ends immediately and does not return on the next launch.
 - [x] 6. **Readability:** the title/body text and the NEXT button are legible against the dark scrim in both light and dark theme.
 
+> **Android install note (2026-07-14, after M10 was verified):** the app id has since changed to `com.itzzinfinity.advanced_todo`, so the **next** APK installs as a **new** app next to the old one. Uninstall the old app first — your data lives in Firestore; just sign in again. Optional cleanup: Firebase console → Project settings → General → delete the old Android app (`com.sisirradar.advanced_todo`) once the old install is gone.
+
+### M11 — Verify feedback-round-3 features (2026-07-14)
+Fresh artifacts in `dist/` after `make all`: Linux `dist/dayforge_1.0.0_amd64.deb` (or `./build/linux/x64/release/bundle/advanced_todo`), Android `dist/dayforge-1.0.0.apk`.
+
+⚠️ **Android:** the app id changed (see the note above) — uninstall the old app first, install this APK, sign in again. Your tasks/history come back from Firestore.
+
+- [ ] 1. **+ everywhere:** the + button shows on Today, Tasks and Progress (not Settings) and opens the add-task form from each.
+- [ ] 2. **Heatmap (desktop):** Progress on Linux — the activity grid now spans the card's full width with bigger cells/more weeks. Resize the window: it adapts, never scrolls sideways.
+- [ ] 3. **Heatmap (mobile portrait):** Progress on the phone held upright — the grid fits with nothing cut off or overflowing.
+- [ ] 4. **Deadline edit:** Tasks → a task's menu → "Change deadline" → pick a later date — the tile shows the new range/day count and Today/Progress reflect it.
+- [ ] 5. **Today branding:** Today's app bar reads **DayForge** top-left with `Today · <date>` beneath.
+- [ ] 6. **Quotes:** the daily quote card and tick snackbars show quotes with no "zenquotes.io" anywhere; still fine offline; tomorrow's quote differs.
+- [ ] 7. **Categories on create:** add a task — suggestion chips (Learning/Skill/Habit/Health/Fitness/Work/Personal) are offered; select two, add a custom one via the "Add your own category" field (+); after creating, the Tasks tile shows all of them comma-separated and the filter chips include the custom one.
+- [ ] 8. **Old tasks keep their category:** tasks created before this build still show their original category (it migrated to the new format).
+- [ ] 9. **Progress filter:** Progress tab → category chips under the app bar — selecting one narrows the heatmap + cards to tasks carrying it; deselecting restores all.
+- [ ] 10. **New Android identity:** notifications still arrive (reminder + snooze + Mark completed) on the reinstalled app.
+
 ## Completed
 - M1 — Create a Firebase project
 - M2 — Enable Email/Password authentication
