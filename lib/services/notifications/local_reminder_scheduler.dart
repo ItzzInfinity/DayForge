@@ -50,7 +50,19 @@ Future<void> markCompletedFromBackground(String taskId) async {
     WidgetsFlutterBinding.ensureInitialized();
     await Firebase.initializeApp(
         options: DefaultFirebaseOptions.currentPlatform);
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    // A freshly spawned background isolate has no auth state yet: the native
+    // SDK restores the persisted session asynchronously, so currentUser is
+    // null for a moment right after initializeApp. Reading it immediately
+    // would hit the "no user" branch and silently drop the tap. Wait for the
+    // first hydrated auth state (bounded, so a genuinely signed-out user
+    // still returns promptly).
+    final auth = FirebaseAuth.instance;
+    final user = auth.currentUser ??
+        await auth
+            .authStateChanges()
+            .firstWhere((u) => u != null)
+            .timeout(const Duration(seconds: 5), onTimeout: () => null);
+    final uid = user?.uid;
     if (uid == null) {
       debugPrint('reminders: mark-done skipped, no signed-in user');
       return;

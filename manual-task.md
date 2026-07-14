@@ -103,16 +103,23 @@ Fresh artifacts in `dist/` after `make all`: Linux `dist/dayforge_1.0.0_amd64.de
 
 ⚠️ **Android:** the app id changed (see the note above) — uninstall the old app first, install this APK, sign in again. Your tasks/history come back from Firestore.
 
-- [ ] 1. **+ everywhere:** the + button shows on Today, Tasks and Progress (not Settings) and opens the add-task form from each.
-- [ ] 2. **Heatmap (desktop):** Progress on Linux — the activity grid now spans the card's full width with bigger cells/more weeks. Resize the window: it adapts, never scrolls sideways.
-- [ ] 3. **Heatmap (mobile portrait):** Progress on the phone held upright — the grid fits with nothing cut off or overflowing.
-- [ ] 4. **Deadline edit:** Tasks → a task's menu → "Change deadline" → pick a later date — the tile shows the new range/day count and Today/Progress reflect it.
-- [ ] 5. **Today branding:** Today's app bar reads **DayForge** top-left with `Today · <date>` beneath.
-- [ ] 6. **Quotes:** the daily quote card and tick snackbars show quotes with no "zenquotes.io" anywhere; still fine offline; tomorrow's quote differs.
-- [ ] 7. **Categories on create:** add a task — suggestion chips (Learning/Skill/Habit/Health/Fitness/Work/Personal) are offered; select two, add a custom one via the "Add your own category" field (+); after creating, the Tasks tile shows all of them comma-separated and the filter chips include the custom one.
-- [ ] 8. **Old tasks keep their category:** tasks created before this build still show their original category (it migrated to the new format).
-- [ ] 9. **Progress filter:** Progress tab → category chips under the app bar — selecting one narrows the heatmap + cards to tasks carrying it; deselecting restores all.
-- [ ] 10. **New Android identity:** notifications still arrive (reminder + snooze + Mark completed) on the reinstalled app.
+- [x] 1. **+ everywhere:** the + button shows on Today, Tasks and Progress (not Settings) and opens the add-task form from each.
+- [x] 2. **Heatmap (desktop):** Progress on Linux — the activity grid now spans the card's full width with bigger cells/more weeks. Resize the window: it adapts, never scrolls sideways.
+- [x] 3. **Heatmap (mobile portrait):** Progress on the phone held upright — the grid fits with nothing cut off or overflowing.
+- [x] 4. **Deadline edit:** Tasks → a task's menu → "Change deadline" → pick a later date — the tile shows the new range/day count and Today/Progress reflect it.
+- [x] 5. **Today branding:** Today's app bar reads **DayForge** top-left with `Today · <date>` beneath.
+- [x] 6. **Quotes:** the daily quote card and tick snackbars show quotes with no "zenquotes.io" anywhere; still fine offline; tomorrow's quote differs.
+- [x] 7. **Categories on create:** add a task — suggestion chips (Learning/Skill/Habit/Health/Fitness/Work/Personal) are offered; select two, add a custom one via the "Add your own category" field (+); after creating, the Tasks tile shows all of them comma-separated and the filter chips include the custom one.
+- [x] 8. **Old tasks keep their category:** tasks created before this build still show their original category (it migrated to the new format).
+- [x] 9. **Progress filter:** Progress tab → category chips under the app bar — selecting one narrows the heatmap + cards to tasks carrying it; deselecting restores all.
+- [x] 10. **New Android identity:** notifications still arrive (reminder + snooze + Mark completed) on the reinstalled app.
+
+### M12 — Verify "Mark completed" from the notification with the app fully closed (2026-07-14)
+Fresh APK in `dist/dayforge-1.0.0.apk` after `make apk`. Fixes a silent no-op where tapping **Mark completed** did nothing when the app process was dead (the background isolate read the auth session before it had hydrated, so the write was skipped).
+
+- [x] 1. Sign in, add a task with a reminder ~2 min ahead, then **swipe the app away** from recents so the process is truly killed.
+- [x] 2. When the reminder fires, tap **Mark completed** on the notification.
+- [x] 3. Reopen the app → Today should show that task ticked for today (and the Firestore `daily_logs/<today>` doc has `completed: true`). Confirm it ticked the *right* task if you have several.
 
 ## Completed
 - M1 — Create a Firebase project
