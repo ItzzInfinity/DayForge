@@ -77,7 +77,7 @@ Fresh artifacts: Linux `./build/linux/x64/release/bundle/advanced_todo`, Android
 - [x] 1. **Calendar readability (both devices):** open any task's detail — day numbers in the circles should now be clearly readable, and on Linux the calendar shouldn't stretch into giant circles.
 - [x] 2. **Archive flow:** Tasks tab → archive a task from its menu — it vanishes from the list (a snackbar points to Settings). Settings → Archived tasks → restore it (back to Active) or delete it. The Archived filter chip is gone from the Tasks tab.
 - [x] 3. **Filter double-tap:** Tasks tab → tap "Active" (already selected) — filter resets to All. Same for Completed.
-- [ ] 4. **Completed-to-bottom + congrats:** with 2+ tasks active today, tick one — it moves under "Completed today". Tick all — a 🎉 "All done for today!" banner pops in.
+- [x] 4. **Completed-to-bottom + congrats:** with 2+ tasks active today, tick one — it moves under "Completed today". Tick all — a 🎉 "All done for today!" banner pops in.
 - [x] 5. **Quotes:** Today shows a quote under the app bar (online: with "· zenquotes.io"; offline: from the bundled list — should still appear). Tick a task — a quote snackbar appears. Tomorrow the daily quote should differ.
 - [x] 6. **Snooze (Android):** set a task reminder ~2 min ahead, close the app. When the notification arrives it has a "Snooze 10 min" button — tap it; the notification should return ~10 min later (repeatable). Change Settings → Snooze duration to 5 and confirm the button label updates on the next reminder.
 - [x] 7. **Snooze (Linux, app running):** same — the desktop notification shows a Snooze button; tapping it re-notifies after the set duration while the app stays open.
@@ -89,12 +89,12 @@ The tour is per-device and shows only on first launch, so to re-test you must cl
 - **Linux:** delete the prefs file, e.g. `rm ~/.local/share/com.example.advanced_todo/shared_preferences.json` (path may vary by bundle id) — or just try it on a device that hasn't run this build yet.
 - **Android:** app info → Storage → Clear data (this also signs you out; sign back in after), or install on a fresh device.
 
-- [ ] 1. **It appears on first run:** launch the app (signed in). The screen blacks out with a bright circle over the **Today** nav icon and a card titled "Today — your daily checklist".
-- [ ] 2. **NEXT walks the tabs:** tap **NEXT** — the spotlight moves to **Tasks** and the app switches to the Tasks tab; again → **Progress**; again → **Settings**, where the button reads **DONE**.
-- [ ] 3. **DONE ends it:** tap **DONE** — the overlay disappears and you're on the normal app.
-- [ ] 4. **It does not return:** fully close and reopen the app — the tour should NOT show again.
-- [ ] 5. **Skip works:** clear the flag again (step above), relaunch, tap **Skip** on the first card — the tour ends immediately and does not return on the next launch.
-- [ ] 6. **Readability:** the title/body text and the NEXT button are legible against the dark scrim in both light and dark theme.
+- [x] 1. **It appears on first run:** launch the app (signed in). The screen blacks out with a bright circle over the **Today** nav icon and a card titled "Today — your daily checklist".
+- [x] 2. **NEXT walks the tabs:** tap **NEXT** — the spotlight moves to **Tasks** and the app switches to the Tasks tab; again → **Progress**; again → **Settings**, where the button reads **DONE**.
+- [x] 3. **DONE ends it:** tap **DONE** — the overlay disappears and you're on the normal app.
+- [x] 4. **It does not return:** fully close and reopen the app — the tour should NOT show again.
+- [x] 5. **Skip works:** clear the flag again (step above), relaunch, tap **Skip** on the first card — the tour ends immediately and does not return on the next launch.
+- [x] 6. **Readability:** the title/body text and the NEXT button are legible against the dark scrim in both light and dark theme.
 
 ## Completed
 - M1 — Create a Firebase project
