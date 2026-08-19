@@ -52,6 +52,37 @@ class Recurrence {
   /// slot budget and stops a 5-minute window from carpet-bombing the tray.
   static const maxOccurrencesPerDay = 48;
 
+  /// The majority rule: a day counts as done once *more than half* its
+  /// reminders are ticked. 9 nudges need 5, 8 need 5, 2 need 2, 1 needs 1 —
+  /// always a strict majority, never an exact half.
+  ///
+  /// This is the default a task gets when the user does not name a target,
+  /// because a day where you drank 6 of 9 glasses is a day you kept the
+  /// habit, and marking it missed is the thing that breaks streaks people
+  /// were actually keeping.
+  static int majorityTarget(int occurrences) =>
+      occurrences <= 1 ? 1 : (occurrences ~/ 2) + 1;
+
+  /// The interval that fits exactly [occurrences] reminders into a window of
+  /// [windowMinutes], for the "N times a day" way of describing a task
+  /// (the inverse of picking an interval and counting what lands).
+  ///
+  /// Floor division alone can overshoot on short windows — a 5-minute window
+  /// asked for 4 reminders yields a 1-minute step and six of them — so the
+  /// step is widened until the count is right.
+  static int intervalForOccurrences({
+    required int windowMinutes,
+    required int occurrences,
+  }) {
+    if (occurrences <= 1 || windowMinutes <= 0) return windowMinutes + 1;
+    var step = windowMinutes ~/ (occurrences - 1);
+    if (step < 1) step = 1;
+    while (step < windowMinutes && windowMinutes ~/ step + 1 > occurrences) {
+      step++;
+    }
+    return step;
+  }
+
   /// Minutes-since-midnight of every reminder in the window, first to last.
   /// A window that ends before it starts yields the single start time rather
   /// than nothing, so a misconfigured task still reminds once.
@@ -77,14 +108,25 @@ class Recurrence {
   /// How many reminders a full day carries.
   int get occurrencesPerDay => occurrenceMinutes.length;
 
-  /// Ticks needed for the day to count as completed. Defaults to one per
-  /// reminder; the user may set a smaller goal ("8 of the 9 nudges is fine").
+  /// Ticks needed for the day to count as completed. Defaults to the
+  /// [majorityTarget] — more than half the day's reminders — and the user may
+  /// override it in either direction ("all 9, no excuses" or "3 is plenty").
   int get targetPerDay {
     if (!isIntraday) return 1;
     final target = _targetPerDay;
-    if (target == null || target < 1) return occurrencesPerDay;
+    if (target == null || target < 1) return majorityTarget(occurrencesPerDay);
     return target > occurrencesPerDay ? occurrencesPerDay : target;
   }
+
+  /// Ticks the day can hold at all. You may keep ticking past [targetPerDay]
+  /// — hitting the target completes the day, it does not close the counter.
+  int get maxPerDay => isIntraday ? occurrencesPerDay : 1;
+
+  /// True when the day completes on a strict majority rather than an explicit
+  /// number the user chose. Used by the UI to explain where the target came
+  /// from instead of showing a bare digit.
+  bool get usesMajorityRule =>
+      isIntraday && (_targetPerDay == null || _targetPerDay < 1);
 
   /// The user's explicit target, if they set one (null = derive it).
   int? get rawTargetPerDay => _targetPerDay;
@@ -122,6 +164,10 @@ class Recurrence {
       (final h, 0) => h == 1 ? 'hour' : '$h hours',
       (final h, final m) => '${h}h ${m}m',
     };
-    return 'Every $every, $startTime–$endTime · $targetPerDay× a day';
+    final goal = targetPerDay == occurrencesPerDay
+        ? '$occurrencesPerDay× a day'
+        : '$targetPerDay of $occurrencesPerDay a day'
+            '${usesMajorityRule ? ' (over half)' : ''}';
+    return 'Every $every, $startTime–$endTime · $goal';
   }
 }

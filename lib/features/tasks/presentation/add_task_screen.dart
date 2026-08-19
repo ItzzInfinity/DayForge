@@ -51,6 +51,14 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   int _intervalMinutes = 90;
   final _target = TextEditingController();
 
+  /// Two ways to say the same schedule. Some habits are naturally a gap
+  /// ("every 90 minutes"), others a count ("8 glasses"), and forcing the
+  /// second through the first is arithmetic the user should not be doing.
+  /// [_byCount] picks which control is shown; the stored recurrence is an
+  /// interval either way.
+  bool _byCount = false;
+  int _repsPerDay = 8;
+
   /// Intervals offered for "remind me every…".
   static const intervalChoices = [15, 30, 45, 60, 90, 120, 180, 240];
 
@@ -58,12 +66,26 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
       '${t.hour.toString().padLeft(2, '0')}:'
       '${t.minute.toString().padLeft(2, '0')}';
 
+  /// Minutes between the window's ends; 0 or less when it is misconfigured.
+  int get _windowMinutes =>
+      (_windowEnd.hour * 60 + _windowEnd.minute) -
+      (_windowStart.hour * 60 + _windowStart.minute);
+
+  /// The gap the schedule actually uses: the one picked, or the one that
+  /// fits the requested number of repetitions into the window.
+  int get _effectiveInterval => _byCount
+      ? Recurrence.intervalForOccurrences(
+          windowMinutes: _windowMinutes,
+          occurrences: _repsPerDay,
+        )
+      : _intervalMinutes;
+
   /// The recurrence the form currently describes.
   Recurrence get _recurrence => _repeatsIntraday
       ? Recurrence.intraday(
           startTime: _hhmm(_windowStart),
           endTime: _hhmm(_windowEnd),
-          intervalMinutes: _intervalMinutes,
+          intervalMinutes: _effectiveInterval,
           targetPerDay: int.tryParse(_target.text.trim()),
         )
       : const Recurrence.daily();
@@ -387,32 +409,75 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                               ),
                             ],
                           ),
-                          DropdownButtonFormField<int>(
-                            key: const Key('task-interval'),
-                            initialValue: _intervalMinutes,
-                            decoration: const InputDecoration(
-                              labelText: 'Remind me every',
-                              border: OutlineInputBorder(),
-                            ),
-                            items: [
-                              for (final minutes in intervalChoices)
-                                DropdownMenuItem(
-                                  value: minutes,
-                                  child: Text(
-                                    minutes < 60
-                                        ? '$minutes minutes'
-                                        : minutes % 60 == 0
-                                        ? '${minutes ~/ 60} hour'
-                                              '${minutes == 60 ? '' : 's'}'
-                                        : '${minutes ~/ 60}h '
-                                              '${minutes % 60}m',
-                                  ),
-                                ),
+                          SegmentedButton<bool>(
+                            key: const Key('task-repeat-by'),
+                            segments: const [
+                              ButtonSegment(
+                                value: false,
+                                label: Text('Every…'),
+                                icon: Icon(Icons.timelapse),
+                              ),
+                              ButtonSegment(
+                                value: true,
+                                label: Text('N times a day'),
+                                icon: Icon(Icons.tag),
+                              ),
                             ],
-                            onChanged: (v) => setState(
-                              () => _intervalMinutes = v ?? _intervalMinutes,
-                            ),
+                            selected: {_byCount},
+                            onSelectionChanged: (selection) =>
+                                setState(() => _byCount = selection.first),
                           ),
+                          const SizedBox(height: 8),
+                          if (_byCount)
+                            DropdownButtonFormField<int>(
+                              key: const Key('task-reps'),
+                              initialValue: _repsPerDay,
+                              decoration: const InputDecoration(
+                                labelText: 'Times a day',
+                                helperText:
+                                    'Spread evenly across the window above',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                for (var n = 1;
+                                    n <= Recurrence.maxOccurrencesPerDay;
+                                    n++)
+                                  DropdownMenuItem(
+                                    value: n,
+                                    child: Text('$n× a day'),
+                                  ),
+                              ],
+                              onChanged: (v) => setState(
+                                () => _repsPerDay = v ?? _repsPerDay,
+                              ),
+                            )
+                          else
+                            DropdownButtonFormField<int>(
+                              key: const Key('task-interval'),
+                              initialValue: _intervalMinutes,
+                              decoration: const InputDecoration(
+                                labelText: 'Remind me every',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                for (final minutes in intervalChoices)
+                                  DropdownMenuItem(
+                                    value: minutes,
+                                    child: Text(
+                                      minutes < 60
+                                          ? '$minutes minutes'
+                                          : minutes % 60 == 0
+                                          ? '${minutes ~/ 60} hour'
+                                                '${minutes == 60 ? '' : 's'}'
+                                          : '${minutes ~/ 60}h '
+                                                '${minutes % 60}m',
+                                    ),
+                                  ),
+                              ],
+                              onChanged: (v) => setState(
+                                () => _intervalMinutes = v ?? _intervalMinutes,
+                              ),
+                            ),
                           const SizedBox(height: 8),
                           TextFormField(
                             key: const Key('task-target'),
@@ -420,9 +485,12 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                             decoration: InputDecoration(
                               labelText: 'Ticks needed per day',
                               helperText:
-                                  'Leave empty to need all '
-                                  '${_recurrence.occurrencesPerDay} '
-                                  'reminders',
+                                  'Leave empty for the majority rule: '
+                                  '${Recurrence.majorityTarget(_recurrence.occurrencesPerDay)}'
+                                  ' of ${_recurrence.occurrencesPerDay} '
+                                  'completes the day. Set '
+                                  '${_recurrence.occurrencesPerDay} to '
+                                  'require them all.',
                               border: const OutlineInputBorder(),
                             ),
                             keyboardType: TextInputType.number,

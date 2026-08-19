@@ -222,6 +222,56 @@ void main() {
     expect(taskDoc.value['durationDays'], 7);
   });
 
+  testWidgets('"N times a day" derives the interval and the majority target',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    await tester.pumpWidget(appWith(repo, gateway: gateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-task')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('task-title')), 'Drink water');
+
+    await tester.scrollUntilVisible(find.byKey(const Key('task-repeat')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Many times a day'));
+    await tester.pumpAndSettle();
+
+    // Say the count instead of the gap: 5 across the 08:00–20:00 window.
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('task-repeat-by')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('N times a day'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('task-reps')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('5× a day').last);
+    await tester.pumpAndSettle();
+
+    // 720 minutes / 4 gaps = 3 hours, and no target typed ⇒ majority of 5.
+    expect(
+      tester.widget<Text>(find.byKey(const Key('task-repeat-summary'))).data,
+      'Every 3 hours, 08:00–20:00 · 3 of 5 a day (over half)',
+    );
+
+    await tester.scrollUntilVisible(find.byKey(const Key('task-submit')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.byKey(const Key('task-submit')));
+    await tester.pumpAndSettle();
+
+    final recurrence = gateway.docs.entries
+        .singleWhere((e) => e.key.startsWith('users/u/tasks/'))
+        .value['recurrence'] as Map<String, dynamic>;
+    expect(recurrence['intervalMinutes'], 180);
+    // Nothing is stored for the target: the majority rule is derived, so a
+    // task keeps following it rather than freezing today's number.
+    expect(recurrence['targetPerDay'], isNull);
+  });
+
   testWidgets('creating a "many times a day" task stores its window',
       (tester) async {
     final repo =
@@ -252,7 +302,7 @@ void main() {
       tester
           .widget<Text>(find.byKey(const Key('task-repeat-summary')))
           .data,
-      'Every 1h 30m, 08:00–20:00 · 8× a day',
+      'Every 1h 30m, 08:00–20:00 · 8 of 9 a day',
     );
 
     await tester.scrollUntilVisible(find.byKey(const Key('task-submit')), 200,

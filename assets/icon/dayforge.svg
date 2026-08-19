@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <title>DayForge</title>
+  <!-- Vector master for the app icon. Everything shipped (Android mipmaps,
+       Windows .ico, the Linux hicolor icon, the sign-in logo) is rendered
+       from this file by tool/render_icon.sh — edit here, never the PNG.
+       Drawn on a 1024 grid so every launcher size divides cleanly. -->
+  <defs>
+    <linearGradient id="night" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#26375c"/>
+      <stop offset="0.55" stop-color="#182f52"/>
+      <stop offset="1" stop-color="#0d1830"/>
+    </linearGradient>
+    <linearGradient id="ember" x1="0.15" y1="0" x2="0.85" y2="1">
+      <stop offset="0" stop-color="#ffd08a"/>
+      <stop offset="0.45" stop-color="#f7a95a"/>
+      <stop offset="1" stop-color="#e2703a"/>
+    </linearGradient>
+    <linearGradient id="flame" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#fff3d6"/>
+      <stop offset="1" stop-color="#f9b464"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Ground: a rounded square, so the same file works as a legacy launcher
+       icon without the platform having to mask anything off. -->
+  <rect width="1024" height="1024" rx="224" ry="224" fill="url(#night)"/>
+
+  <!-- The calendar: body, header rule, and the two binder rings. Stroked
+       rather than filled so the night background reads through it. -->
+  <rect x="180" y="204" width="664" height="652" rx="72" ry="72"
+        fill="none" stroke="url(#ember)" stroke-width="56"/>
+  <g fill="url(#ember)">
+    <!-- The header rule is a filled rect, not a stroked line: a horizontal
+         line has a zero-height bounding box, and an objectBoundingBox
+         gradient on it collapses to nothing in some renderers (cairosvg
+         drops it entirely). Every gradient-painted shape here has area. -->
+    <rect x="180" y="320" width="664" height="56"/>
+    <rect x="296" y="128" width="60" height="150" rx="30" ry="30"/>
+    <rect x="668" y="128" width="60" height="150" rx="30" ry="30"/>
+  </g>
+
+  <!-- The forge fire, sitting in the calendar's header row. It is drawn
+       twice: once in the background colour as a fat stroke, then filled.
+       That halo is what keeps it from melting into the header rule behind
+       it when the icon is drawn at 48px. -->
+  <g>
+    <path fill="none" stroke="#16294c" stroke-width="34" stroke-linejoin="round" d="
+      M512 246
+      C548 300 566 336 566 372
+      C566 408 542 430 512 430
+      C482 430 458 408 458 372
+      C458 350 468 330 488 306
+      C492 330 500 344 512 352
+      C506 322 506 282 512 246 Z"/>
+    <path fill="url(#flame)" d="
+      M512 246
+      C548 300 566 336 566 372
+      C566 408 542 430 512 430
+      C482 430 458 408 458 372
+      C458 350 468 330 488 306
+      C492 330 500 344 512 352
+      C506 322 506 282 512 246 Z"/>
+  </g>
+
+  <!-- The anvil, as one silhouette: the face with its horn on the left, a
+       waisted body, and the base flaring back out. Flat rather than shaded
+       because the icon has to survive being drawn at 48px, and it is punched
+       out of the calendar (fill-rule aside, it simply overlaps) so the two
+       read as a single mark. The base stops at 812, clear of the calendar's
+       bottom rule at 856, so the anvil stands *in* the frame, not on it. -->
+  <path fill="url(#ember)" d="
+    M348 440
+    H876
+    V560
+    H690
+    C686 616 646 648 628 690
+    C616 720 612 748 610 768
+    H700
+    L716 812
+    H370
+    L386 768
+    H476
+    C474 748 470 720 458 690
+    C440 648 400 616 396 560
+    H348
+    C266 556 172 532 112 502 Z"/>
+</svg>

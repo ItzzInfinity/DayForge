@@ -2,7 +2,47 @@
 
 > Resume protocol: read this file first, continue from **Next step**, do not redo completed work, always run the self-check after each task.
 
-## Current state — 2026-08-18 (session 13) — rebuilt round-4 release artifacts; round 4 still uncommitted
+## Current state — 2026-08-19 (session 14) — feedback round 5 COMPLETE (git, keys, versioning, majority rule, build memory, vector icon)
+
+- **Current phase:** All FSD phases + feedback rounds 1–5 done.
+- **Last completed task:** R5.7 — vector icon master + render script.
+- **Next task:** None queued. Validation: `flutter analyze && flutter test` (**160 tests**), then `make all`. Waiting on M13, M14, M15, M16.
+
+### Session 14 summary — 160 tests passing, analyze clean
+1. **Divergent branches (R5.1):** `origin/main` had two commits the laptop lacked, both editing `lib/firebase_options.dart` — and they cancel out (`git diff 70eab8c origin/main` is empty), because the "replace keys with SECRET_KEY" web edit was undone by the very next commit. So the keys were never actually removed from the remote. `git rebase origin/main` replayed the one local commit on top; history is linear and the push is a fast-forward. Set `pull.rebase=true` for this repo.
+2. **Firebase keys (R5.2):** `lib/firebase_options.dart` + `android/app/google-services.json` untracked and gitignored, `.template` copies committed, `make` gained `firebase-check`. History and tag `v1.0.0` still contain them — **user chose not to rewrite published history** (2026-08-19). These are client identifiers, not credentials; rules + App Check are the real control. M15 records the rotate-instead option.
+3. **Versioning (R5.3):** artifacts are named `dayforge_1.0.0_amd64.deb`, semver and nothing else, `-dirty` appended only when the tree is unclean. `STAMP` still reaches the app via `--dart-define=BUILD_ID` (Settings → About). Scheme documented under "Versioning" in README.
+4. **Majority rule (R5.4):** an intraday task with no explicit target completes its day at a strict majority of its occurrences (`Recurrence.majorityTarget`, 9→5). Crucially the target stays *derived* — `targetPerDay: null` is still written — so editing the schedule moves the bar rather than freezing creation-day arithmetic. `addTick` now takes `target` **and** `max`: clamp at `maxPerDay`, flag `completed` at `targetPerDay`, so a nine-of-nine day records nine.
+5. **Count instead of gap (R5.5):** add-task "Every…" / "N times a day" toggle; `Recurrence.intervalForOccurrences` derives the interval and stores an ordinary one.
+6. **Build memory (R5.6):** `systemd-run --user --scope -p MemoryMax=$(MEM_MAX) -p MemorySwapMax=0` + `nice -n 10` around every Flutter build, `.NOTPARALLEL:`, and `make doctor`.
+7. **Vector icon (R5.7):** `assets/icon/dayforge.svg` + `tool/render_icon.sh [--install]`; PNG/mipmaps/.ico regenerated from it.
+
+**Gotchas learned this session:**
+- **A revert on the remote can look like a fix.** The GitHub-web commit that replaced the keys with `SECRET_KEY` was followed by one that put them back, so `origin/main` still shipped them while the commit *messages* read like the problem was handled. Diff the trees (`git diff <base> origin/main`), never trust the subject lines.
+- **Firebase `AIza…` keys are not secrets** — they ship in every APK and identify the project. GitHub's scanner flags the pattern regardless, which is a reason to gitignore them, not a reason to panic or to rewrite history.
+- **A gradient-stroked horizontal line disappears.** `stroke="url(#grad)"` on `M180 348 H844` has a zero-height bounding box, and `objectBoundingBox` gradient units collapse on it — cairosvg drops the shape entirely while ImageMagick drew it. Every gradient-painted shape in the icon now has area (the header rule is a filled rect).
+- **ImageMagick is the wrong SVG renderer.** Without a librsvg delegate `convert` falls back to its own parser and renders gradients as visible bands. `tool/render_icon.sh` prefers `rsvg-convert`, then `cairosvg`, and says so if neither is present.
+- **The memory ceiling has to be a cgroup, not a flag.** `org.gradle.jvmargs=-Xmx3G` (set in session 13) bounds only the Gradle JVM; the AOT `gen_snapshot` processes are separate and unbounded, which is how a 14 GB machine with no swap still lost its desktop session. A systemd scope bounds the whole process tree.
+- Widget tests must `scrollUntilVisible` any new add-task control — the form is long enough that a fresh field lands off the 800×600 test viewport and `tap()` silently warns instead of failing usefully.
+
+### Partially done
+- none
+
+### Blocked
+- **M13** — device verification of round 4 on Linux + Android.
+- **M14** — Firebase console check of the password-reset email.
+- **M15** — Firebase config on a fresh clone; optional key rotation (nothing to do on this laptop).
+- **M16** — optional swap for this laptop.
+
+### Next step (exact)
+Round 5 is committed and pushed. If the user reports M13–M16 results, fix whatever they raise. If they want a clean release build: `make version` to confirm the tree is not dirty, then `make all` — artifacts land as `dist/dayforge-1.0.0.apk` and `dist/dayforge_1.0.0_amd64.deb`. If they ask for new work, run `node ~/.claude/skills/fsd-workflow/scaffold.mjs status`; the only unqueued roadmap items remain the deferred-optional FCM and snooze/retry entries in Phase 3.
+
+### Assumptions
+- The majority rule is **per task with a sensible default**, not a global setting (user decision, 2026-08-19): an empty "ticks needed per day" means the majority, a number overrides it.
+- Existing intraday tasks that never set a target silently move from "all occurrences" to "the majority" on upgrade. That is the requested behaviour change, and it can only loosen a day's requirement, never tighten it.
+- Firebase keys stay in git history; the user declined a history rewrite (2026-08-19).
+
+## Previous state — 2026-08-18 (session 13) — rebuilt round-4 release artifacts; round 4 still uncommitted
 
 - **Current phase:** All FSD phases + feedback rounds 1–4 done. No new feature work this session — validation and artifacts only.
 - **Last completed task:** `make all` → round-4 release artifacts in `dist/`, and M13 updated with their exact filenames.

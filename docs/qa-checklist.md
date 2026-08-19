@@ -18,6 +18,8 @@ Conventions the tests rely on:
   `history-{date}`, `onboarding-add-task`, `reminder-sound`/`sound-*`,
   `alarm-volume`, `forgot-password`/`reset-email`/`send-reset`,
   `task-repeat`/`task-window-*`/`task-interval`/`task-target`,
+  `task-repeat-by`/`task-reps` (the "N times a day" mode; scroll to them —
+  the add-task form is taller than the 800×600 test viewport),
   `rule-fixedWindow`/`rule-targetDays`, `counter-{id}`/`count-{id}`/
   `untick-{id}` (intraday tiles use `tick-{id}` as the +1 button).
 - Settings is a long list: widget tests use `scrollToKey` before tapping a

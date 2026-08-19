@@ -428,11 +428,14 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
   }
 
   /// Intraday tasks count ticks instead of flipping a checkbox: +1 per
-  /// glass of water, and the day completes when the target is reached.
+  /// glass of water, and the day completes when the target is reached —
+  /// which, under the majority rule, can be short of the day's full count,
+  /// so ticking continues past the tick mark.
   Future<void> _tick(int delta) async {
     final target = widget.task.targetPerDay;
+    final max = widget.task.maxPerDay;
     final previous = _count;
-    final optimistic = (_count + delta).clamp(0, target);
+    final optimistic = (_count + delta).clamp(0, max);
     setState(() {
       _count = optimistic;
       _completed = optimistic >= target;
@@ -441,7 +444,7 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
     if (repo == null) return;
     try {
       await repo.addTick(widget.task.id, widget.dateKey,
-          target: target, delta: delta);
+          target: target, max: max, delta: delta);
       ref.invalidate(todayLogProvider(widget.task.id));
       ref.invalidate(taskLogsProvider(widget.task.id));
       if (delta > 0 && mounted) _showEncouragement();
@@ -494,6 +497,7 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
   Widget _counterTile(BuildContext context) {
     final theme = Theme.of(context);
     final target = widget.task.targetPerDay;
+    final max = widget.task.maxPerDay;
     return ListTile(
       key: ValueKey('counter-${widget.task.id}'),
       leading: Icon(
@@ -512,7 +516,10 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
             onPressed: _count == 0 ? null : () => _tick(-1),
           ),
           Text(
-            '$_count/$target',
+            // Read as "how far to done" until the day is done, then as
+            // "how far to perfect" — the denominator that still means
+            // something to the user at that moment.
+            _completed ? '$_count/$max' : '$_count/$target',
             key: ValueKey('count-${widget.task.id}'),
             style: theme.textTheme.titleMedium,
           ),
@@ -520,7 +527,7 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
             key: ValueKey('tick-${widget.task.id}'),
             icon: const Icon(Icons.add),
             tooltip: 'Record one',
-            onPressed: _count >= target ? null : () => _tick(1),
+            onPressed: _count >= max ? null : () => _tick(1),
           ),
         ],
       ),

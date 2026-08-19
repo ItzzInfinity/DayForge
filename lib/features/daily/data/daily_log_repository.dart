@@ -40,14 +40,22 @@ class DailyLogRepository {
   /// rather than an atomic increment: the REST gateway (Linux) has no
   /// increment operator, and a lost race here costs at most one tick, which
   /// the user can simply tap again.
+  /// Records a tick (or with a negative [delta], takes one back).
+  ///
+  /// [target] is what completes the day; [max] is what the counter can hold.
+  /// They differ whenever the day completes on a majority — reaching 5 of 9
+  /// marks the day done but must not stop the 6th glass of water being
+  /// counted — so the clamp uses [max] and the flag uses [target].
   Future<int> addTick(
     String taskId,
     String dateKey, {
     required int target,
+    int? max,
     int delta = 1,
   }) async {
+    final ceiling = (max == null || max < target) ? target : max;
     final current = await get(taskId, dateKey);
-    final count = ((current?.count ?? 0) + delta).clamp(0, target);
+    final count = ((current?.count ?? 0) + delta).clamp(0, ceiling);
     final completed = count >= target;
     final now = DateTime.now().toUtc();
     await _gateway.setDocument(

@@ -117,7 +117,8 @@ class AuthGate extends ConsumerWidget {
           .firstOrNull;
       // An intraday task counts the tap; a daily one is simply done.
       if (task != null && task.recurrence.isIntraday) {
-        await repo.addTick(taskId, dateKey, target: task.targetPerDay);
+        await repo.addTick(taskId, dateKey,
+            target: task.targetPerDay, max: task.maxPerDay);
       } else {
         await repo.setCompleted(taskId, dateKey, completed: true);
       }

@@ -31,7 +31,7 @@ All user data lives under `users/{uid}` so security rules are trivial (`request.
 | startDate | string | "YYYY-MM-DD" (local date, avoids TZ drift) |
 | durationDays | int | task runs startDate .. startDate+durationDays-1 |
 | reminderTime | string | "HH:mm", null = use global default (daily tasks only) |
-| recurrence | map | absent/null = once a day; otherwise `{kind: "intraday", startTime, endTime, intervalMinutes, targetPerDay}` — reminders every intervalMinutes inside the window, repeating daily (max 48/day) |
+| recurrence | map | absent/null = once a day; otherwise `{kind: "intraday", startTime, endTime, intervalMinutes, targetPerDay}` — reminders every intervalMinutes inside the window, repeating daily (max 48/day). `targetPerDay` null means **the majority rule**: the day completes once more than half the occurrences are ticked, recomputed from the schedule rather than frozen at creation. A number overrides it (clamped to 1..occurrences). The add-task form can also express the schedule as "N times a day", which derives intervalMinutes from the window before storing — nothing new lands in the document |
 | completionMode | string | `fixedWindow` (default, and for every task created before this shipped) / `targetDays` |
 | targetDays | int | completed days the run is aiming for; pinned when completionMode is `targetDays` so end-date extensions never move the goal |
 | status | string | active / completed / archived |

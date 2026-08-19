@@ -41,6 +41,24 @@ Repositories expose streams; providers map them to UI state. Writes are optimist
 ## Recurring task strategy
 Tasks are stored once with `startDate` + `durationDays`. Daily entries are **not pre-generated**; the Today screen computes which tasks are active for the current date and reads/creates a `daily_logs` doc lazily when the user ticks or remarks. This keeps writes minimal (free-tier friendly).
 
+### When a day counts as done (the majority rule, 2026-08-19)
+A task that repeats many times a day completes its day at a **strict majority** of its occurrences — 5 of 9, 5 of 8, never an exact half (`Recurrence.majorityTarget`). A day where you drank six of nine glasses is a day you kept the habit; marking it missed breaks streaks the user was actually keeping.
+
+Two properties make this behave rather than surprise:
+
+- **The target is derived, not stored.** `targetPerDay: null` stays null in Firestore, and `Recurrence.targetPerDay` computes the majority on read. Widen the task's window later and the bar moves with it, instead of enforcing arithmetic frozen on the day it was created. A number written into that field is an explicit override and wins.
+- **Completing is not the same as capping.** `DailyLogRepository.addTick` takes `target` *and* `max`: it clamps the counter at `maxPerDay` (every occurrence) but flips `completed` at `targetPerDay`. Reaching the majority marks the day done without closing the counter, so a nine-of-nine day is still recorded as nine.
+
+Everything downstream — streaks, the heatmap, the calendar, exports — keeps reading the single `completed` flag and needed no change.
+
+The add-task form can describe the same schedule either way round: a gap ("every 90 minutes") or a count ("8 times a day"). The count path runs `Recurrence.intervalForOccurrences` to find the interval that fits exactly that many reminders into the window and stores an ordinary interval — the count is a UI affordance, not a second representation in the data model.
+
+## Build and release
+- **Versioning** is plain semver in `pubspec.yaml`; artifacts are named for it and nothing else (`dayforge_1.0.0_amd64.deb`). The full build stamp — commit count, sha, dirty timestamp — travels inside the binary via `--dart-define=BUILD_ID` and surfaces in Settings → About, so a file is named for its release while the running app can still say exactly which build it is. See README → Versioning.
+- **Memory containment.** Gradle's JVM, the Kotlin daemon and one `gen_snapshot` per ABI all peak together, and a JVM heap flag bounds only the first of those. Every Flutter build therefore runs inside `systemd-run --user --scope -p MemoryMax=… -p MemorySwapMax=0` at `nice -n 10`, with `.NOTPARALLEL:` stopping `make -j` from running the Android and Linux builds at once. An overshoot OOM-kills inside the build's own cgroup; on a machine with no swap it used to take the desktop session instead. `make doctor` reports the ceiling, whether containment is active, and the host's RAM/swap.
+- **Firebase client config** (`lib/firebase_options.dart`, `android/app/google-services.json`) is gitignored with `.template` copies committed; `make` will not start without the real files. The keys are project identifiers rather than credentials — `firestore.rules` and App Check are the access control — but GitHub's scanner flags the pattern on every push.
+- **The app icon** is a vector: `assets/icon/dayforge.svg` is the master and `tool/render_icon.sh [--install]` renders the committed PNG plus the Android mipmaps and Windows `.ico`. The PNG stays in the repo because flutter_launcher_icons and the `.deb` packaging both need a raster.
+
 ## Reminder strategy
 - Primary: local scheduled notifications per device (works offline, survives restarts via boot-time rescheduling on Android; on desktop, re-scheduled at app launch).
 - Optional later: FCM for sync-related nudges. No server functions required for MVP.

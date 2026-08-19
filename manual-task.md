@@ -154,3 +154,28 @@ Sending the reset mail needs nothing enabled beyond Email/Password auth (already
 - M5 — Linux desktop build packages
 - M6 — Reminders verified on Android phone (2026-07-13)
 - M7 — Linux app verified end to end, incl. reminders (2026-07-13)
+
+### M15 — Firebase config files are no longer in git (2026-08-19)
+
+`lib/firebase_options.dart` and `android/app/google-services.json` are now gitignored — they carry the project's `AIza…` client keys and GitHub's secret scanner mails you about them on every push. **They already exist on this laptop, so nothing breaks here.** This matters only on a fresh clone, or if you ever delete them.
+
+Worth knowing: those keys are not secrets. Firebase publishes them in every Android/web client; they identify the project, not authorise anyone. What actually protects the data is `firestore.rules` plus Firebase App Check. Keeping them out of git buys a quiet inbox, not security.
+
+- [ ] 1. Nothing to do right now. On a fresh clone, run `flutterfire configure --project=advanced-todo-infinite`, or `cp lib/firebase_options.dart.template lib/firebase_options.dart` (and the same for `android/app/google-services.json.template`) and paste the API key from the Firebase console → Project settings → Your apps.
+- [ ] 2. Note: they are still in the repo's **history**, including tag `v1.0.0`. Removing them from history would mean rewriting and force-pushing every past commit; you chose not to (2026-08-19). If you ever want them genuinely gone, rotate the keys in the Google Cloud console (APIs & Services → Credentials) — that invalidates the published ones without touching git.
+- [ ] 3. If GitHub mails you again about the *old* commits, it is describing history, not the current tree. `git grep AIza $(git rev-parse HEAD)` returning nothing is the check that the tip is clean.
+
+### M16 — Optional: give this laptop some swap (2026-08-19)
+
+Not required — `make` now runs builds inside a memory-capped systemd scope, so an overshoot kills the build instead of your session. But this machine has **14 GB RAM and zero swap**, which is why a big build could take the desktop down at all: with no swap the kernel has nowhere to spill and picks a victim immediately.
+
+- [ ] 1. If you want the headroom (a few minutes, needs sudo):
+```
+sudo apt-get install zram-config     # compressed swap in RAM, no disk writes
+# or a plain file:
+sudo fallocate -l 8G /swapfile && sudo chmod 600 /swapfile
+sudo mkswap /swapfile && sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+```
+- [ ] 2. Confirm with `make doctor` — the swap line stops warning.
+

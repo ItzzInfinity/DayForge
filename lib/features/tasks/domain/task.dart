@@ -65,6 +65,10 @@ class Task {
   /// Ticks needed today for this task to count as done.
   int get targetPerDay => recurrence.targetPerDay;
 
+  /// Ticks today can hold. Above [targetPerDay] whenever the day completes on
+  /// a majority, so an all-nine day is still recorded as nine.
+  int get maxPerDay => recurrence.maxPerDay;
+
   final TaskStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
