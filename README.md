@@ -49,7 +49,9 @@ make doctor     # memory budget, containment, RAM/swap
 make test       # flutter analyze + flutter test
 ```
 
-Builds run inside a systemd scope with a hard memory ceiling (`MEM_MAX`, 8G default), because Gradle's JVM, the Kotlin daemon and one `gen_snapshot` per ABI all peak together — on a machine with no swap that used to get the *desktop session* OOM-killed rather than the build. Overshoot now kills only the build. If it does: `make apk ABI=android-arm64` (≈⅓ the work and RAM, right for any phone made this decade) or `make apk MEM_MAX=10G`.
+Builds run through `tool/capped_build.sh`, which puts a hard memory ceiling (`MEM_MAX`, 8G default) on the whole build process tree — Gradle's JVM, the Kotlin daemon and one `gen_snapshot` per ABI all peak together, and on a machine with no swap that used to get the *desktop session* OOM-killed rather than the build. Overshoot now kills only the build. If it does: `make apk ABI=android-arm64` (≈⅓ the work and RAM, right for any phone made this decade) or `make apk MEM_MAX=10G`. `make doctor` shows the current budget.
+
+(The script exists because Flutter here is a classic snap: `snap run` escapes into a scope of its own, so a plain `systemd-run --scope` would cap an empty cgroup. See `docs/architecture.md` → Build and release.)
 
 ## Run it
 ```

@@ -76,30 +76,28 @@ VERSION_ARGS := --build-name=$(VERSION) --build-number=$(BUILD) \
 # picks a victim system-wide, and it is usually not the build — sessions have
 # been logged out mid-`make all` (2026-08-19).
 #
-# So every build runs inside its own systemd scope with a hard memory ceiling.
-# Overshoot now OOM-kills something inside the build's cgroup; the desktop is
-# never a candidate. `nice` keeps the other 11 cores' worth of work behind
-# interactive processes so the machine stays usable while it compiles.
+# So every build goes through tool/capped_build.sh, which puts a hard memory
+# ceiling on the whole process tree. It is a script and not a bare
+# `systemd-run --scope` here because Flutter is installed as a *classic snap*:
+# `snap run` leaves the cgroup it was started in and takes a fresh scope of
+# its own under app.slice, so a wrapper's ceiling would govern an empty cgroup
+# while Gradle ran unbounded beside it. The script caps that scope too.
+# `nice` keeps the other 11 cores' worth of work behind interactive processes
+# so the machine stays usable while it compiles.
 #
 #   make apk MEM_MAX=6G     tighter ceiling on a busier machine
 #   make apk CAP=           opt out entirely (CI, or a host without systemd)
 #
-# Default 8G: measured peak for a universal APK is ~6.5G, and it leaves ~6G
-# of this 14G machine for everything else.
+# Default 8G: measured peak for a universal APK is ~4.3G inside the scope, and
+# it leaves ~6G of this 14G machine for everything else.
 MEM_MAX ?= 8G
-NICE    ?= nice -n 10
-ifeq ($(HAVE_SYSTEMD_RUN),)
-HAVE_SYSTEMD_RUN := $(shell command -v systemd-run 2>/dev/null)
-endif
-ifeq ($(HOST),linux)
-ifneq ($(HAVE_SYSTEMD_RUN),)
-CAP ?= systemd-run --user --scope -q --description=dayforge-build \
-         -p MemoryMax=$(MEM_MAX) -p MemorySwapMax=0 -- $(NICE)
-else
-CAP ?= $(NICE)
-endif
-else
+NICE_LEVEL ?= 10
+export MEM_MAX
+export NICE_LEVEL
+ifeq ($(HOST),windows)
 CAP ?=
+else
+CAP ?= bash tool/capped_build.sh
 endif
 
 # Serialize: `make -j4 all` would otherwise run the Android and Linux builds
@@ -212,7 +210,8 @@ test:
 doctor:
 	@echo "host:            $(HOST)"
 	@echo "memory ceiling:  $(MEM_MAX)  (make apk MEM_MAX=6G to tighten)"
-	@echo "containment:     $(if $(HAVE_SYSTEMD_RUN),systemd scope + $(NICE),NONE — systemd-run not found; a runaway build can OOM the desktop)"
+	@echo "containment:     $(if $(CAP),$(CAP) at nice $(NICE_LEVEL),NONE — a runaway build can OOM the desktop)"
+	@bash -c 'command -v systemd-run >/dev/null || echo "                 WARNING systemd-run missing: the ceiling cannot be enforced"'
 	@echo "ABIs:            $(if $(ABI),$(ABI),all (universal APK) — ABI=android-arm64 is much cheaper)"
 	@free -h 2>/dev/null | awk 'NR==1{print "                 "$$0} NR==2{print "RAM:             "$$2" total, "$$7" available"} /^Swap/{print "swap:            "$$2 ($$2=="0B"?"   <-- no swap: an overshoot has nowhere to spill":"")}'
 
