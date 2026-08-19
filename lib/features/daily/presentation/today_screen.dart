@@ -383,6 +383,7 @@ class _TodayEntry extends ConsumerStatefulWidget {
 
 class _TodayEntryState extends ConsumerState<_TodayEntry> {
   late bool _completed = widget.log?.completed ?? false;
+  late int _count = widget.log?.count ?? (_completed ? 1 : 0);
   late final TextEditingController _remark =
       TextEditingController(text: widget.log?.remark ?? '');
   late String _savedRemark = widget.log?.remark ?? '';
@@ -426,6 +427,46 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
     }
   }
 
+  /// Intraday tasks count ticks instead of flipping a checkbox: +1 per
+  /// glass of water, and the day completes when the target is reached.
+  Future<void> _tick(int delta) async {
+    final target = widget.task.targetPerDay;
+    final previous = _count;
+    final optimistic = (_count + delta).clamp(0, target);
+    setState(() {
+      _count = optimistic;
+      _completed = optimistic >= target;
+    });
+    final repo = ref.read(dailyLogRepositoryProvider);
+    if (repo == null) return;
+    try {
+      await repo.addTick(widget.task.id, widget.dateKey,
+          target: target, delta: delta);
+      ref.invalidate(todayLogProvider(widget.task.id));
+      ref.invalidate(taskLogsProvider(widget.task.id));
+      if (delta > 0 && mounted) _showEncouragement();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _count = previous;
+        _completed = previous >= target;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not save. Try again.')),
+      );
+    }
+  }
+
+  void _showEncouragement() {
+    final quote = encouragementQuote();
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(
+        content: Text('✓ ${quote.text}'
+            '${quote.author.isEmpty ? '' : ' — ${quote.author}'}'),
+      ));
+  }
+
   Future<void> _saveRemark() async {
     final text = _remark.text.trim();
     if (text == _savedRemark) return;
@@ -444,22 +485,64 @@ class _TodayEntryState extends ConsumerState<_TodayEntry> {
     }
   }
 
+  String get _subtitle =>
+      'Day $_dayNumber of ${widget.task.durationDays}'
+      '${widget.task.categoryLabel != null ? ' · ${widget.task.categoryLabel}' : ''}';
+
+  /// Intraday tile: n/target with −1 and +1, and a check once the day's
+  /// target is reached.
+  Widget _counterTile(BuildContext context) {
+    final theme = Theme.of(context);
+    final target = widget.task.targetPerDay;
+    return ListTile(
+      key: ValueKey('counter-${widget.task.id}'),
+      leading: Icon(
+        _completed ? Icons.check_circle : Icons.repeat,
+        color: _completed ? theme.colorScheme.primary : null,
+      ),
+      title: Text(widget.task.title),
+      subtitle: Text('$_subtitle · ${widget.task.recurrence.summary}'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            key: ValueKey('untick-${widget.task.id}'),
+            icon: const Icon(Icons.remove),
+            tooltip: 'Undo one',
+            onPressed: _count == 0 ? null : () => _tick(-1),
+          ),
+          Text(
+            '$_count/$target',
+            key: ValueKey('count-${widget.task.id}'),
+            style: theme.textTheme.titleMedium,
+          ),
+          IconButton(
+            key: ValueKey('tick-${widget.task.id}'),
+            icon: const Icon(Icons.add),
+            tooltip: 'Record one',
+            onPressed: _count >= target ? null : () => _tick(1),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        CheckboxListTile(
-          key: ValueKey('tick-${widget.task.id}'),
-          value: _completed,
-          onChanged: (v) => _toggle(v ?? false),
-          controlAffinity: ListTileControlAffinity.leading,
-          title: Text(widget.task.title),
-          subtitle: Text(
-            'Day $_dayNumber of ${widget.task.durationDays}'
-            '${widget.task.categoryLabel != null ? ' · ${widget.task.categoryLabel}' : ''}',
+        if (widget.task.recurrence.isIntraday)
+          _counterTile(context)
+        else
+          CheckboxListTile(
+            key: ValueKey('tick-${widget.task.id}'),
+            value: _completed,
+            onChanged: (v) => _toggle(v ?? false),
+            controlAffinity: ListTileControlAffinity.leading,
+            title: Text(widget.task.title),
+            subtitle: Text(_subtitle),
           ),
-        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
           child: Focus(

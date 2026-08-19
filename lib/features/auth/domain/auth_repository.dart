@@ -12,6 +12,11 @@ abstract interface class AuthRepository {
 
   Future<void> signOut();
 
+  /// Emails a password-reset link to [email]. Succeeds silently for unknown
+  /// addresses on purpose — telling a stranger which emails have accounts
+  /// leaks the user list.
+  Future<void> sendPasswordReset(String email);
+
   /// Fresh Firebase ID token, used by REST-based data access (Linux).
   Future<String?> getIdToken();
 }

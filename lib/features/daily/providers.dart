@@ -4,6 +4,8 @@ import '../../core/providers.dart';
 import '../../core/utils/date_utils.dart';
 import '../../services/firestore/providers.dart';
 import '../auth/providers.dart';
+import '../tasks/domain/task.dart';
+import '../tasks/providers.dart';
 import 'data/daily_log_repository.dart';
 import 'domain/daily_log.dart';
 
@@ -31,4 +33,19 @@ final taskLogsProvider =
   final repo = ref.watch(dailyLogRepositoryProvider);
   if (repo == null) return const [];
   return repo.getAllForTask(taskId);
+});
+
+/// Ids of the active tasks already ticked for today. Watching each task's
+/// [todayLogProvider] means every tick/untick (Today screen, notification
+/// action, backfill) refreshes this automatically — which is what lets the
+/// reminder scheduler drop a reminder the user has already satisfied.
+final completedTodayProvider = FutureProvider<Set<String>>((ref) async {
+  final tasks = ref.watch(tasksProvider).value ?? const <Task>[];
+  final done = <String>{};
+  for (final task in tasks) {
+    if (task.status != TaskStatus.active) continue;
+    final log = await ref.watch(todayLogProvider(task.id).future);
+    if (log?.completed ?? false) done.add(task.id);
+  }
+  return done;
 });

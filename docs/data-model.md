@@ -15,6 +15,10 @@ All user data lives under `users/{uid}` so security rules are trivial (`request.
 | defaultDurationDays | int | default duration for new tasks (e.g. 21) |
 | defaultReminderTime | string | "HH:mm" local time |
 | notificationsEnabled | bool | |
+| snoozeMinutes | int | how far the Snooze button postpones a reminder |
+| reminderSoundId | string | `default` / `chime` / `beep` / `bell` / `alarm` (default) / `buzz` / `silent` / `device` |
+| deviceSoundUri / deviceSoundLabel | string | Android ringtone picked from the phone; used when reminderSoundId is `device` |
+| alarmVolume | bool | play reminders on the alarm audio channel |
 | quietHoursStart / quietHoursEnd | string | "HH:mm", optional |
 | themeMode | string | system / light / dark |
 
@@ -26,7 +30,10 @@ All user data lives under `users/{uid}` so security rules are trivial (`request.
 | categories | array&lt;string&gt; | zero or more labels, for filtering; legacy docs may instead hold a single `category` string, migrated on read |
 | startDate | string | "YYYY-MM-DD" (local date, avoids TZ drift) |
 | durationDays | int | task runs startDate .. startDate+durationDays-1 |
-| reminderTime | string | "HH:mm", null = use global default |
+| reminderTime | string | "HH:mm", null = use global default (daily tasks only) |
+| recurrence | map | absent/null = once a day; otherwise `{kind: "intraday", startTime, endTime, intervalMinutes, targetPerDay}` — reminders every intervalMinutes inside the window, repeating daily (max 48/day) |
+| completionMode | string | `fixedWindow` (default, and for every task created before this shipped) / `targetDays` |
+| targetDays | int | completed days the run is aiming for; pinned when completionMode is `targetDays` so end-date extensions never move the goal |
 | status | string | active / completed / archived |
 | createdAt / updatedAt | timestamp | updatedAt drives last-write-wins |
 
@@ -35,7 +42,8 @@ Doc ID **is** the local date → idempotent writes, easy range queries.
 | field | type | notes |
 |---|---|---|
 | date | string | "YYYY-MM-DD" (duplicated for queries) |
-| completed | bool | the daily checkbox |
+| completed | bool | the daily checkbox; for an intraday task, "the day's target was reached" |
+| count | int | ticks recorded today (intraday); legacy ticked days read as 1 |
 | remark | string | short note (also allowed on skipped days) |
 | completedAt | timestamp | null if not completed |
 | updatedAt | timestamp | conflict resolution |

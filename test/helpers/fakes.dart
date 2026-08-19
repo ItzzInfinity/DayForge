@@ -6,6 +6,7 @@ import 'package:advanced_todo/features/export/data/export_saver.dart';
 import 'package:advanced_todo/features/onboarding/data/tutorial_store.dart';
 import 'package:advanced_todo/features/tasks/domain/task.dart';
 import 'package:advanced_todo/services/firestore/firestore_gateway.dart';
+import 'package:advanced_todo/services/notifications/device_sound_picker.dart';
 import 'package:advanced_todo/services/notifications/reminder_scheduler.dart';
 
 class FakeAuthRepository implements AuthRepository {
@@ -42,6 +43,19 @@ class FakeAuthRepository implements AuthRepository {
 
   @override
   Future<String?> getIdToken() async => 'fake-token';
+
+  /// Addresses a reset mail was requested for.
+  final resetRequests = <String>[];
+
+  /// Set to make the next reset attempt fail (e.g. an offline device).
+  AuthException? resetError;
+
+  @override
+  Future<void> sendPasswordReset(String email) async {
+    final error = resetError;
+    if (error != null) throw error;
+    resetRequests.add(email);
+  }
 }
 
 /// Records sync calls; keeps widget tests away from the notifications plugin.
@@ -65,20 +79,27 @@ class FakeReminderScheduler implements ReminderScheduler {
   Future<void> sync(
     List<Task> tasks,
     DateTime now, {
-    String defaultTime = defaultReminderTime,
-    int snoozeMinutes = defaultSnoozeMinutes,
+    ReminderOptions options = const ReminderOptions(),
   }) async {
     syncedTaskLists.add(tasks);
-    lastDefaultTime = defaultTime;
-    lastSnoozeMinutes = snoozeMinutes;
+    lastOptions = options;
   }
 
-  String? lastDefaultTime;
-  int? lastSnoozeMinutes;
+  ReminderOptions? lastOptions;
+  String? get lastDefaultTime => lastOptions?.defaultTime;
+  int? get lastSnoozeMinutes => lastOptions?.snoozeMinutes;
+
+  /// Sound each showNow() was asked to play, newest last.
+  final shownSounds = <ReminderSoundChoice>[];
 
   @override
-  Future<void> showNow({required String title, required String body}) async {
+  Future<void> showNow({
+    required String title,
+    required String body,
+    ReminderSoundChoice sound = const ReminderSoundChoice(),
+  }) async {
     shownNow.add('$title: $body');
+    shownSounds.add(sound);
   }
 }
 
@@ -162,5 +183,24 @@ class FlakyFirestoreGateway extends FakeFirestoreGateway {
           statusCode: 503);
     }
     return super.getCollection(path);
+  }
+}
+
+/// Stands in for the Android system ringtone picker.
+class FakeDeviceSoundPicker implements DeviceSoundPicker {
+  FakeDeviceSoundPicker({this.isSupported = true, this.result});
+
+  @override
+  final bool isSupported;
+
+  /// What the picker "returns"; null simulates a cancelled pick.
+  ({String uri, String label})? result;
+
+  final pickedWith = <String?>[];
+
+  @override
+  Future<({String uri, String label})?> pick({String? currentUri}) async {
+    pickedWith.add(currentUri);
+    return result;
   }
 }

@@ -45,6 +45,28 @@ Tasks are stored once with `startDate` + `durationDays`. Daily entries are **not
 - Primary: local scheduled notifications per device (works offline, survives restarts via boot-time rescheduling on Android; on desktop, re-scheduled at app launch).
 - Optional later: FCM for sync-related nudges. No server functions required for MVP.
 
+**Scheduling model (round 4, 2026-08-17).** `ReminderScheduler.sync` replaces
+every scheduled notification on each change, from three inputs bundled in
+`ReminderOptions`: the default time, the snooze length and the chosen sound —
+plus `completedToday`, the set of tasks already ticked, whose reminder for
+*today* is skipped (`nextReminderInstant`). A task contributes one time a day,
+or every slot of its intraday window (`reminderTimesFor`). Ids are
+`stableNotificationId(taskId) * 64 + slot`, with the last slot reserved for the
+snoozed one-shot, which is why occurrences are capped at 48 a day.
+
+**Sound.** Bundled tones are synthesised by `tool/generate_sounds.py` (no
+third-party audio licence) into a Flutter asset (Linux) and an Android raw
+resource. Android channels are immutable, so the channel id encodes the sound
+and the alarm-volume flag (`ReminderSoundChoice.channelKey`); "Pick from
+device" goes through the `dayforge/sound_picker` MethodChannel in
+`MainActivity` (RingtoneManager). Windows maps the tones onto built-in toast
+sounds — custom audio there needs an MSIX package.
+
+**Rollover.** `completionMode: targetDays` tasks keep their end date far
+enough out to still reach `targetDays` completed days; `applyRollovers` runs
+on every task-list load and is idempotent, so the refresh it triggers settles
+at once.
+
 ## Offline & conflict strategy (reviewed 2026-07-13, Phase 5)
 
 **Android / Windows (native SDK):** Firestore offline persistence is enabled

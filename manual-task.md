@@ -121,6 +121,31 @@ Fresh APK in `dist/dayforge-1.0.0.apk` after `make apk`. Fixes a silent no-op wh
 - [x] 2. When the reminder fires, tap **Mark completed** on the notification.
 - [x] 3. Reopen the app → Today should show that task ticked for today (and the Firestore `daily_logs/<today>` doc has `completed: true`). Confirm it ticked the *right* task if you have several.
 
+### M13 — Verify feedback-round-4 features (2026-08-17)
+Artifacts rebuilt 2026-08-18 (build id `13.70eab8c.dirty2026-08-18-0010` — "dirty" because round 4 is not committed yet; Settings → About shows this string, so you can confirm you are testing the right build):
+
+- Android — `dist/dayforge-1.0.0+13.70eab8c.dirty2026-08-18-0010.apk` (56 MB). Install over the old one; same app id as round 3, so your data stays and no uninstall is needed.
+- Linux — `dist/dayforge_1.0.0+13.70eab8c.dirty2026-08-18-0010_amd64.deb` (9.8 MB, `sudo dpkg -i <file>`), or just run `./build/linux/x64/release/bundle/advanced_todo`.
+
+- [ ] 1. **Sound picker:** Settings → Notifications → Reminder sound — pick each bundled tone and hit **Preview**; you should hear it. Pick "Alarm (loud)", then fire Settings → "Send a test notification" — it arrives *with that sound* at alarm volume.
+- [ ] 2. **Device sound (Android):** Settings → Reminder sound → **Pick from device…** — the system ringtone/alarm picker opens; choose an alarm; the setting shows its name and a real reminder uses it.
+- [ ] 3. **Early tick, no pop-up:** add a task with a reminder ~5 min ahead, tick it on Today *now*, leave the app closed — **no notification should arrive** at that time. Untick it and confirm the reminder *does* arrive.
+- [ ] 4. **Intraday reminder:** add a task "Drink water", Repeat = multiple times a day, window ~ now→now+20 min, every 5 min, target 3 — reminders arrive every 5 min; Today shows a `n/3` counter that goes up on each +1 (and from the notification's Mark completed); at 3/3 the day counts complete and the reminders stop for the day.
+- [ ] 5. **Intraday repeats tomorrow:** the same task fires again the next day starting at the window start.
+- [ ] 6. **Forgot password:** sign out → **Forgot password?** on the sign-in screen → enter your email → confirmation message; the reset mail arrives (check spam, see M14) → open the link, set a new password, sign in with it. Try it on both Linux and Android.
+- [ ] 7. **Rollover — fixed window:** create a task with Completion rule = *Fixed window*, 3 days, backfill 1 day, let the end date pass — it ends on the end date (moves out of Today).
+- [ ] 8. **Rollover — target days:** create a task with Completion rule = *Target days*, 3 days; miss a day; after the original end date the task is still active and the end date has rolled forward by the number of missed days. The Tasks tile shows the new range and `x/3 days completed`.
+- [ ] 9. **Change the rule later:** Tasks → task menu → "Completion rule" switches an existing task between the two modes.
+- [ ] 10. **Nothing regressed:** existing tasks still show their categories/streaks/heatmap; snooze and "Mark completed" from the notification still work.
+
+### M14 — Password reset email (Firebase console, 2026-08-17)
+Sending the reset mail needs nothing enabled beyond Email/Password auth (already on, M2), but the mail itself is worth checking once:
+
+- [ ] 1. Firebase console → **Authentication → Templates → Password reset** — confirm the sender (`noreply@<project>.firebaseapp.com`) and, optionally, set the "from name" to **DayForge**.
+- [ ] 2. Trigger a reset from the app (M13·6) and confirm the mail arrives; **check the spam folder** — Firebase's default sender is often filtered.
+- [ ] 3. Note: **your existing password cannot be looked up anywhere.** Firebase stores only a salted hash — the console (Authentication → Users) shows the email, uid, sign-in dates and lets you send a reset link, never the password itself. If it is not in your password manager, resetting it is the only route.
+
+
 ## Completed
 - M1 — Create a Firebase project
 - M2 — Enable Email/Password authentication

@@ -2,7 +2,69 @@
 
 > Resume protocol: read this file first, continue from **Next step**, do not redo completed work, always run the self-check after each task.
 
-## Current state — 2026-07-14 (session 11) — Rebrand + feedback round 3 COMPLETE (pending M11 user verification)
+## Current state — 2026-08-18 (session 13) — rebuilt round-4 release artifacts; round 4 still uncommitted
+
+- **Current phase:** All FSD phases + feedback rounds 1–4 done. No new feature work this session — validation and artifacts only.
+- **Last completed task:** `make all` → round-4 release artifacts in `dist/`, and M13 updated with their exact filenames.
+- **Next task:** None queued — waiting on M13 (device verification of round 4, artifacts now actually present) and M14 (password-reset email in the Firebase console).
+
+### Session 13 summary — 157 tests passing
+1. **Re-validated the session-12 tree:** `flutter analyze` clean, `flutter test` → **157 passed** (session 12's checkpoint said 156; the tree has one more).
+2. **`dist/` was empty.** Session 12's checkpoint claims R4.6 produced fresh artifacts, but nothing was there — so M13 could not be run at all. Rebuilt with `make all`: `dist/dayforge-1.0.0+13.70eab8c.dirty2026-08-18-0010.apk` (56 MB) and `dist/dayforge_1.0.0+13.70eab8c.dirty2026-08-18-0010_amd64.deb` (9.8 MB). `exe` skipped (Windows host required, as designed).
+3. **M13 header rewritten** with the exact artifact filenames, sizes, install notes and the build id — Settings → About prints that same string, so the user can confirm which build they are testing.
+
+**Gotchas learned this session:**
+- **A checkpoint claiming an artifact exists is not evidence that it does.** Session 12 recorded "fresh `dist/` artifacts via `make all`" and `dist/` was empty; the user would have hit that at M13 step 1. Cheap fix for future sessions: `ls dist/` before writing the artifact claim into a checkpoint.
+- The build stamp is `.dirty<timestamp>` whenever `git status --porcelain` is non-empty — including untracked files. Round 4 is 34 modified + 11 untracked files, so these artifacts are stamped dirty. That is honest (the build is not reproducible from any commit), but a clean stamp needs the commit to happen *before* `make all`, not after.
+
+### Partially done
+- none
+
+### Blocked
+- **M13** — device verification of round 4 on Linux + Android (artifacts are now in `dist/`).
+- **M14** — Firebase console check of the password-reset email template/sender, and confirming the mail arrives (spam folder included).
+
+### Next step (exact)
+Wait for the user's M13/M14 results and fix whatever they report. Two housekeeping items are also open and need the user's go-ahead: (a) round 4 is still uncommitted — 34 modified + 11 untracked files — so commit it once M13 passes, and (b) rebuild with `make all` after that commit if a clean (non-`.dirty`) build stamp is wanted. If the user asks for new work first, run `node ~/.claude/skills/fsd-workflow/scaffold.mjs status`; the only unqueued roadmap items are the deferred-optional FCM and snooze/retry entries in Phase 3.
+
+### Assumptions
+- The user chose to build without committing first (asked and answered 2026-08-18), accepting the `.dirty` stamp on these artifacts.
+
+## Previous state — 2026-08-17 (session 12) — feedback round 4 complete (sounds, early-tick fix, intraday, reset, rollover)
+
+- **Current phase:** All FSD phases + feedback rounds 1–4 done. Round 4 shipped notification sounds, the early-tick reminder fix, intraday recurring tasks, password reset and per-task rollover rules.
+- **Last completed task:** R4.6 — docs (data-model/architecture/qa-checklist) + fresh `dist/` artifacts via `make all`.
+- **Next task:** None queued — waiting on M13 (device verification of round 4) and M14 (password-reset email in the Firebase console). Validation: `flutter analyze && flutter test` (156 tests), then `make all`.
+
+### Session 12 summary — 156 tests passing
+1. **Sounds (R4.1):** 5 tones synthesised by `tool/generate_sounds.py` → `assets/sounds/*.ogg` + `android/app/src/main/res/raw/*.ogg` (no third-party licence). `ReminderSound`/`ReminderSoundChoice` catalogue; Settings → "Reminder sound" (per-tone Preview fires a real notification, the only honest preview) + "Alarm volume" switch. Android channel id encodes sound + volume because channels are immutable. Android "Pick from device…" goes through the new `dayforge/sound_picker` MethodChannel in `MainActivity` (RingtoneManager); Linux plays the asset, Windows maps to built-in toast sounds.
+2. **Early-tick bug (R4.2):** `completedTodayProvider` (watches every active task's `todayLogProvider`, so ticks from the screen, the notification action or backfill all refresh it) → `ReminderOptions.completedToday` → `nextReminderInstant(..., doneToday: true)` skips today's fire. Unticking re-arms it.
+3. **Intraday tasks (R4.3):** `Recurrence` (window + interval + optional target, capped at 48 slots/day), `Task.recurrence`, `DailyLog.count`. Add-task form: Repeat = Once a day | Many times a day → from/until, interval dropdown, "ticks needed per day", live summary. Scheduler arms every slot (`reminderTimesFor`), ids re-based to 64 slots per task. Today shows a `n/target` counter tile (−1 / +1) instead of a checkbox; `DailyLogRepository.addTick` keeps `completed` in step, and both notification paths (in-app + background isolate, target from the payload) increment it.
+4. **Forgot password (R4.4):** `AuthRepository.sendPasswordReset` on native (`sendPasswordResetEmail`) and REST (`accounts:sendOobCode`); unknown addresses succeed silently so the user list can't be probed. Sign-in screen link → dialog pre-filled from the email field → non-committal confirmation mentioning spam.
+5. **Rollover (R4.5):** `CompletionMode.fixedWindow | targetDays` per task (chosen on the add form, switchable from the Tasks menu), `Task.targetDays` pinned at creation, idempotent `rolloverDurationDays` + `applyRollovers` running on every task-list load in `AuthGate`.
+
+**Gotchas learned this session:**
+- `Task.targetDays` defaulting to `durationDays` made the rollover chase its own tail — extending the duration moved the goal, so the task could never finish. The goal must be **pinned** at creation (and re-pinned on every extension) for the rule to converge.
+- Android notification channels are immutable: reusing one id would freeze the first sound the user ever picked. The channel id now encodes the sound and the alarm-volume flag.
+- A `TextEditingController` created for a dialog and disposed right after `showDialog` returns blows up — the dialog is still animating out and rebuilds the field. Keep it on the State.
+- Settings has outgrown one screen of a `ListView`: two pre-existing tests broke purely because their tiles fell below the fold. `scrollToKey` in `widget_test.dart` is the fix; use it for any new tile.
+- `flutter_local_notifications` v22 splits platform code into separate packages — Linux sound is `AssetsLinuxSound`, Windows audio is `WindowsNotificationAudio.preset(...)` and has no custom-audio support outside MSIX.
+
+### Partially done
+- none
+
+### Blocked
+- **M13** — device verification of round 4 on Linux + Android (artifacts in `dist/`).
+- **M14** — Firebase console check of the password-reset email template/sender, and confirming the mail arrives (spam folder included).
+
+### Next step (exact)
+Wait for the user's M13/M14 results and fix whatever they report. If they ask for more work first, run `node ~/.claude/skills/fsd-workflow/scaffold.mjs status` and take the next pending roadmap item.
+
+### Assumptions
+- Reminders default to the loud "Alarm" tone on the alarm audio channel (the user asked for an alarm-style sound); every user gets this on upgrade because the settings default changed.
+- Intraday tasks were specified as window + interval with a per-day tick counter, and rollover mode as a per-task choice (user decisions, 2026-08-17).
+
+## Previous state — 2026-07-14 (session 11) — Rebrand + feedback round 3 COMPLETE (pending M11 user verification)
 
 - **Current phase:** All FSD phases + feedback rounds 1–3 done. App is now **DayForge** (icon `assets/icon/dayforge.png`, generated via flutter_launcher_icons; .deb package `dayforge`).
 - **Last completed task:** Feedback round 3 (8 items, see roadmap) + fresh `dist/` artifacts.

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/build_info.dart';
 import '../../../core/providers.dart';
 import '../../../core/widgets/content_width.dart';
 import '../../../services/notifications/providers.dart';
@@ -79,6 +80,107 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (days == null || days < 1) return;
     await _update(ref, (s) => s.copyWith(defaultDurationDays: days));
+  }
+
+  /// Plays [choice] through a real notification — the only honest preview,
+  /// since that is exactly the code path a reminder takes.
+  Future<void> _previewSound(
+    BuildContext context,
+    WidgetRef ref,
+    ReminderSoundChoice choice,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ref.read(reminderSchedulerProvider).showNow(
+            title: 'DayForge',
+            body: 'Sound preview — ${choice.label}',
+            sound: choice,
+          );
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Could not play: $e')));
+    }
+  }
+
+  Future<void> _pickReminderSound(
+    BuildContext context,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    // Grabbed before the dialog: the picker path needs a messenger after an
+    // await, and this screen's context is gone by then in tests.
+    final messenger = ScaffoldMessenger.of(context);
+    final selected = await showDialog<ReminderSound>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Reminder sound'),
+        children: [
+          for (final sound in ReminderSound.all)
+            ListTile(
+              key: Key('sound-${sound.id}'),
+              title: Text(sound.label),
+              subtitle:
+                  sound.description == null ? null : Text(sound.description!),
+              selected: sound.id == settings.reminderSoundId,
+              trailing: sound.resource == null
+                  ? null
+                  : IconButton(
+                      key: Key('sound-preview-${sound.id}'),
+                      icon: const Icon(Icons.play_arrow),
+                      tooltip: 'Preview',
+                      onPressed: () => _previewSound(
+                        context,
+                        ref,
+                        settings.soundChoice.copyWith(sound: sound),
+                      ),
+                    ),
+              onTap: () => Navigator.of(context).pop(sound),
+            ),
+          if (ref.read(deviceSoundPickerProvider).isSupported)
+            ListTile(
+              key: const Key('sound-device'),
+              leading: const Icon(Icons.library_music_outlined),
+              title: Text(ReminderSound.device.label),
+              subtitle: Text(settings.deviceSoundLabel ??
+                  ReminderSound.device.description!),
+              selected: settings.reminderSoundId == ReminderSound.device.id,
+              onTap: () => Navigator.of(context).pop(ReminderSound.device),
+            ),
+        ],
+      ),
+    );
+    if (selected == null) return;
+    if (selected.id == ReminderSound.device.id) {
+      await _pickDeviceSound(messenger, ref, settings);
+      return;
+    }
+    await _update(ref, (s) => s.copyWith(reminderSoundId: selected.id));
+  }
+
+  /// Hands off to the system ringtone picker; a cancel leaves the current
+  /// sound alone rather than switching to a half-configured device pick.
+  Future<void> _pickDeviceSound(
+    ScaffoldMessengerState messenger,
+    WidgetRef ref,
+    AppSettings settings,
+  ) async {
+    try {
+      final picked = await ref
+          .read(deviceSoundPickerProvider)
+          .pick(currentUri: settings.deviceSoundUri);
+      if (picked == null) return;
+      await _update(
+        ref,
+        (s) => s.copyWith(
+          reminderSoundId: ReminderSound.device.id,
+          deviceSoundUri: () => picked.uri,
+          deviceSoundLabel: () => picked.label,
+        ),
+      );
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('Could not open the sound picker: $e')),
+      );
+    }
   }
 
   Future<void> _exportData(BuildContext context, WidgetRef ref) async {
@@ -193,6 +295,26 @@ class SettingsScreen extends ConsumerWidget {
             },
           ),
           ListTile(
+            key: const Key('reminder-sound'),
+            enabled: settings.notificationsEnabled,
+            leading: const Icon(Icons.music_note_outlined),
+            title: const Text('Reminder sound'),
+            subtitle: Text(settings.soundChoice.label),
+            onTap: () => _pickReminderSound(context, ref, settings),
+          ),
+          SwitchListTile(
+            key: const Key('alarm-volume'),
+            secondary: const Icon(Icons.volume_up_outlined),
+            title: const Text('Alarm volume'),
+            subtitle: const Text(
+                'Play reminders on the alarm channel so they are heard '
+                'even with the ringer down'),
+            value: settings.alarmVolume,
+            onChanged: settings.notificationsEnabled
+                ? (v) => _update(ref, (s) => s.copyWith(alarmVolume: v))
+                : null,
+          ),
+          ListTile(
             key: const Key('default-duration'),
             leading: const Icon(Icons.event_repeat),
             title: const Text('Default task duration'),
@@ -229,6 +351,7 @@ class SettingsScreen extends ConsumerWidget {
                       title: 'DayForge',
                       body: 'Test notification — reminders can reach you '
                           'on this device.',
+                      sound: settings.soundChoice,
                     );
               } catch (e) {
                 messenger.showSnackBar(
@@ -274,6 +397,14 @@ class SettingsScreen extends ConsumerWidget {
             ],
           ),
           const Divider(),
+          ListTile(
+            key: const Key('about-build'),
+            leading: const Icon(Icons.info_outline),
+            title: Text(BuildInfo.label),
+            subtitle: Text(BuildInfo.isDirty
+                ? 'Built from uncommitted changes'
+                : 'Quote this when reporting anything'),
+          ),
           ListTile(
             key: const Key('sign-out'),
             leading: const Icon(Icons.logout),

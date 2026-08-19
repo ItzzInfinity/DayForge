@@ -9,8 +9,11 @@ import '../features/auth/providers.dart';
 import '../features/daily/providers.dart';
 import '../features/settings/domain/app_settings.dart';
 import '../features/settings/providers.dart';
+import '../features/tasks/data/rollover_service.dart';
+import '../features/tasks/domain/task.dart';
 import '../features/tasks/providers.dart';
 import '../services/notifications/providers.dart';
+import '../services/notifications/reminder_scheduler.dart';
 import 'home_shell.dart';
 import 'theme.dart';
 
@@ -58,13 +61,20 @@ class AuthGate extends ConsumerWidget {
       if (tasks == null) return;
       final settings =
           ref.read(appSettingsProvider).value ?? const AppSettings();
+      // Tasks already ticked today keep quiet until tomorrow.
+      final completedToday =
+          ref.read(completedTodayProvider).value ?? const <String>{};
       final scheduler = ref.read(reminderSchedulerProvider);
       await scheduler.requestPermission();
       await scheduler.sync(
         settings.notificationsEnabled ? tasks : const [],
         ref.read(currentDateProvider),
-        defaultTime: settings.defaultReminderTime,
-        snoozeMinutes: settings.snoozeMinutes,
+        options: ReminderOptions(
+          defaultTime: settings.defaultReminderTime,
+          snoozeMinutes: settings.snoozeMinutes,
+          sound: settings.soundChoice,
+          completedToday: completedToday,
+        ),
       );
     }
 
@@ -73,15 +83,44 @@ class AuthGate extends ConsumerWidget {
           .catchError((Object e) => debugPrint('reminder sync failed: $e'));
     }
 
+    // Target-days tasks that fell behind get their end date pushed forward
+    // before anything renders them. Idempotent, so the task-list refresh it
+    // triggers settles immediately.
+    ref.listen(tasksProvider, (previous, next) {
+      final tasks = next.value;
+      final taskRepo = ref.read(taskRepositoryProvider);
+      final logRepo = ref.read(dailyLogRepositoryProvider);
+      if (tasks == null || taskRepo == null || logRepo == null) return;
+      applyRollovers(
+        tasks: tasks,
+        taskRepository: taskRepo,
+        dailyLogRepository: logRepo,
+        now: ref.read(currentDateProvider),
+      ).then(
+        (rolled) {
+          if (rolled.isNotEmpty) ref.invalidate(tasksProvider);
+        },
+        onError: (Object e) => debugPrint('rollover failed: $e'),
+      );
+    });
     ref.listen(tasksProvider, onChange);
     ref.listen(appSettingsProvider, onChange);
+    ref.listen(completedTodayProvider, onChange);
     // Notification "Mark completed" while the app runs: write today's log
     // through the normal repository so every open screen refreshes.
     ref.read(reminderSchedulerProvider).onMarkCompleted = (taskId) async {
       final repo = ref.read(dailyLogRepositoryProvider);
       if (repo == null) return;
       final dateKey = toDateKey(ref.read(currentDateProvider));
-      await repo.setCompleted(taskId, dateKey, completed: true);
+      final task = (ref.read(tasksProvider).value ?? const <Task>[])
+          .where((t) => t.id == taskId)
+          .firstOrNull;
+      // An intraday task counts the tap; a daily one is simply done.
+      if (task != null && task.recurrence.isIntraday) {
+        await repo.addTick(taskId, dateKey, target: task.targetPerDay);
+      } else {
+        await repo.setCompleted(taskId, dateKey, completed: true);
+      }
       ref.invalidate(todayLogProvider(taskId));
       ref.invalidate(taskLogsProvider(taskId));
     };

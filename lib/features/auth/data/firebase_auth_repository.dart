@@ -45,6 +45,18 @@ class FirebaseAuthRepository implements AuthRepository {
   Future<void> signOut() => _auth.signOut();
 
   @override
+  Future<void> sendPasswordReset(String email) async {
+    try {
+      await _auth.sendPasswordResetEmail(email: email);
+    } on fb.FirebaseAuthException catch (e) {
+      // An unknown address is not an error the user should see (see the
+      // interface doc); anything else is.
+      if (e.code == 'user-not-found') return;
+      throw AuthException(_friendlyMessage(e.code));
+    }
+  }
+
+  @override
   Future<String?> getIdToken() async => _auth.currentUser?.getIdToken();
 
   Future<AppUser> _guard(Future<AppUser> Function() action) async {

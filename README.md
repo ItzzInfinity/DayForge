@@ -2,7 +2,7 @@
 
 A cross-platform (Android, Windows, Linux), cloud-synced recurring task tracker built with Flutter + Firebase. Add a task once with a duration, tick it daily, leave a short remark each day, get reminders, and watch your streaks.
 
-Spec: [`FSD.md`](FSD.md) (single source of truth). **Status: all six FSD phases complete + feedback round 1 shipped (2026-07-13)** — snooze-able reminders, daily motivational quotes (bundled 593-quote rotation), archive tucked into Settings, completed-tasks-sink + 🎉 banner on Today, readable calendar day numbers, double-tap filter reset.
+Spec: [`FSD.md`](FSD.md) (single source of truth). **Status: all six FSD phases complete + feedback rounds 1–4 shipped (2026-08-17)** — snooze-able reminders with a choice of alarm sounds (bundled tones or any ringtone on the phone), reminders that stay quiet once you have ticked the task, tasks that repeat many times a day inside a window ("drink water 08:00–20:00, every 90 min") with a per-day tick counter, password reset from the sign-in screen, and a per-task completion rule — a fixed window, or a target number of completed days whose end date rolls forward when you miss one.
 
 ## Project docs
 - [`docs/requirements.md`](docs/requirements.md) — final scope + acceptance-criteria mapping

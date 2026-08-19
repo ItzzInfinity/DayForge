@@ -58,6 +58,24 @@ class RestAuthRepository implements AuthRepository {
   Future<AppUser> signUp({required String email, required String password}) =>
       _authenticate('signUp', email, password);
 
+  @override
+  Future<void> sendPasswordReset(String email) async {
+    final res = await _http.post(
+      Uri.parse('https://identitytoolkit.googleapis.com/v1/'
+          'accounts:sendOobCode?key=$apiKey'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'requestType': 'PASSWORD_RESET', 'email': email}),
+    );
+    if (res.statusCode == 200) return;
+    final data = jsonDecode(res.body) as Map<String, dynamic>;
+    final code = ((data['error'] as Map?)?['message'] as String? ?? 'UNKNOWN')
+        .split(' ')
+        .first;
+    // Unknown addresses stay silent (see AuthRepository.sendPasswordReset).
+    if (code == 'EMAIL_NOT_FOUND') return;
+    throw AuthException(_friendlyMessage(code));
+  }
+
   Future<AppUser> _authenticate(
     String endpoint,
     String email,

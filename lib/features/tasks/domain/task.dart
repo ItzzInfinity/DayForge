@@ -1,4 +1,6 @@
 import '../../../core/utils/date_utils.dart';
+import 'recurrence.dart';
+import 'rollover.dart';
 
 /// Firestore doc: `users/{uid}/tasks/{taskId}` (docs/data-model.md).
 enum TaskStatus { active, completed, archived }
@@ -12,10 +14,18 @@ class Task {
     required this.startDate,
     required this.durationDays,
     this.reminderTime,
+    this.recurrence = const Recurrence.daily(),
+    this.completionMode = CompletionMode.fixedWindow,
+    int? targetDays,
     this.status = TaskStatus.active,
     required this.createdAt,
     required this.updatedAt,
-  }) : assert(durationDays >= 1, 'durationDays must be at least 1');
+  })  :
+        // The field is private but the named parameter cannot be, so an
+        // initializing formal is not an option here.
+        // ignore: prefer_initializing_formals
+        _targetDays = targetDays,
+        assert(durationDays >= 1, 'durationDays must be at least 1');
 
   final String id;
   final String title;
@@ -35,8 +45,25 @@ class Task {
   /// The task runs startDate .. startDate + durationDays - 1.
   final int durationDays;
 
-  /// `HH:mm`, null = use the global default reminder time.
+  /// `HH:mm`, null = use the global default reminder time. For intraday
+  /// tasks the window in [recurrence] governs instead.
   final String? reminderTime;
+
+  /// Once a day (default) or several times a day inside a window.
+  final Recurrence recurrence;
+
+  /// Whether the end date is fixed or rolls forward until [targetDays] days
+  /// have been completed.
+  final CompletionMode completionMode;
+
+  final int? _targetDays;
+
+  /// Completed days the task is aiming for. Defaults to the original
+  /// duration, which is what the user typed when creating it.
+  int get targetDays => _targetDays ?? durationDays;
+
+  /// Ticks needed today for this task to count as done.
+  int get targetPerDay => recurrence.targetPerDay;
 
   final TaskStatus status;
   final DateTime createdAt;
@@ -63,6 +90,9 @@ class Task {
         'startDate': startDate,
         'durationDays': durationDays,
         'reminderTime': reminderTime,
+        'recurrence': recurrence.toMap(),
+        'completionMode': completionMode.name,
+        'targetDays': _targetDays,
         'status': status.name,
         'createdAt': createdAt,
         'updatedAt': updatedAt,
@@ -83,6 +113,14 @@ class Task {
       startDate: map['startDate'] as String,
       durationDays: map['durationDays'] as int,
       reminderTime: map['reminderTime'] as String?,
+      recurrence: Recurrence.fromMap(
+        (map['recurrence'] as Map?)?.cast<String, dynamic>(),
+      ),
+      // Tasks created before rollover shipped keep their fixed window.
+      completionMode: CompletionMode.values
+              .asNameMap()[map['completionMode'] as String?] ??
+          CompletionMode.fixedWindow,
+      targetDays: map['targetDays'] as int?,
       status: TaskStatus.values.asNameMap()[map['status']] ??
           TaskStatus.active,
       createdAt: map['createdAt'] as DateTime,
@@ -97,6 +135,9 @@ class Task {
     String? startDate,
     int? durationDays,
     String? Function()? reminderTime,
+    Recurrence? recurrence,
+    CompletionMode? completionMode,
+    int? Function()? targetDays,
     TaskStatus? status,
     DateTime? updatedAt,
   }) {
@@ -108,6 +149,9 @@ class Task {
       startDate: startDate ?? this.startDate,
       durationDays: durationDays ?? this.durationDays,
       reminderTime: reminderTime != null ? reminderTime() : this.reminderTime,
+      recurrence: recurrence ?? this.recurrence,
+      completionMode: completionMode ?? this.completionMode,
+      targetDays: targetDays != null ? targetDays() : _targetDays,
       status: status ?? this.status,
       createdAt: createdAt,
       updatedAt: updatedAt ?? this.updatedAt,

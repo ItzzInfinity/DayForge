@@ -8,6 +8,7 @@ import '../../../services/notifications/reminder_scheduler.dart'
     as notifications;
 import '../../progress/presentation/task_detail_screen.dart';
 import '../../settings/providers.dart';
+import '../domain/rollover.dart';
 import '../domain/task.dart';
 import '../providers.dart';
 import 'add_task_fab.dart';
@@ -265,6 +266,53 @@ class _TaskTile extends ConsumerWidget {
     ));
   }
 
+  /// Switches between the two ways a run can end. Turning target-days on
+  /// pins the goal at the days completed so far plus what is left of the
+  /// current window — i.e. the number the user originally asked for.
+  Future<void> _changeCompletionRule(BuildContext context, WidgetRef ref) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final picked = await showDialog<CompletionMode>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: const Text('Completion rule'),
+        children: [
+          ListTile(
+            key: const Key('rule-fixedWindow'),
+            title: const Text('Fixed window'),
+            subtitle: Text('Ends on ${task.endDate}, whatever happens'),
+            selected: task.completionMode == CompletionMode.fixedWindow,
+            onTap: () =>
+                Navigator.of(context).pop(CompletionMode.fixedWindow),
+          ),
+          ListTile(
+            key: const Key('rule-targetDays'),
+            title: const Text('Target days'),
+            subtitle: Text('Runs until ${task.targetDays} days are actually '
+                'completed — missed days move the end date forward'),
+            selected: task.completionMode == CompletionMode.targetDays,
+            onTap: () => Navigator.of(context).pop(CompletionMode.targetDays),
+          ),
+        ],
+      ),
+    );
+    if (picked == null || picked == task.completionMode) return;
+    final repo = ref.read(taskRepositoryProvider);
+    if (repo == null) return;
+    await repo.save(task.copyWith(
+      completionMode: picked,
+      // Fixed window has no goal to keep; target days pins today's duration
+      // as the goal so later extensions cannot move it.
+      targetDays: () =>
+          picked == CompletionMode.targetDays ? task.targetDays : null,
+    ));
+    ref.invalidate(tasksProvider);
+    messenger.showSnackBar(SnackBar(
+      content: Text(picked == CompletionMode.targetDays
+          ? 'Runs until ${task.targetDays} days are completed.'
+          : 'Ends on ${task.endDate}.'),
+    ));
+  }
+
   Future<void> _delete(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -297,6 +345,8 @@ class _TaskTile extends ConsumerWidget {
       title: Text(task.title),
       subtitle: Text(
         '${task.startDate} → ${task.endDate} · ${task.durationDays} days'
+        '${task.completionMode == CompletionMode.targetDays ? ' · target ${task.targetDays} done' : ''}'
+        '${task.recurrence.isIntraday ? ' · ${task.recurrence.targetPerDay}×/day' : ''}'
         '${task.categoryLabel != null ? ' · ${task.categoryLabel}' : ''}',
       ),
       onTap: () => Navigator.of(context).push(
@@ -319,6 +369,7 @@ class _TaskTile extends ConsumerWidget {
               'reactivate' => _setStatus(context, ref, TaskStatus.active),
               'reminder' => _changeReminder(context, ref),
               'deadline' => _changeDeadline(context, ref),
+              'rule' => _changeCompletionRule(context, ref),
               'archive' => _setStatus(context, ref, TaskStatus.archived),
               'delete' => _delete(context, ref),
               _ => Future<void>.value(),
@@ -342,6 +393,10 @@ class _TaskTile extends ConsumerWidget {
                 PopupMenuItem(
                   value: 'deadline',
                   child: Text('Change deadline'),
+                ),
+                PopupMenuItem(
+                  value: 'rule',
+                  child: Text('Completion rule'),
                 ),
               ],
               const PopupMenuItem(value: 'archive', child: Text('Archive')),

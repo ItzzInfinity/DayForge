@@ -22,6 +22,7 @@ Widget appWith(
   FakeReminderScheduler? scheduler,
   FakeExportSaver? exportSaver,
   FakeTutorialStore? tutorialStore,
+  FakeDeviceSoundPicker? soundPicker,
 }) {
   return ProviderScope(
     overrides: [
@@ -37,10 +38,25 @@ Widget appWith(
       tutorialStoreProvider.overrideWithValue(
         tutorialStore ?? FakeTutorialStore(),
       ),
+      // Desktop-like default: no system ringtone picker unless a test wants one.
+      deviceSoundPickerProvider.overrideWithValue(
+        soundPicker ?? FakeDeviceSoundPicker(isSupported: false),
+      ),
       currentDateProvider.overrideWithValue(DateTime(2026, 7, 13)),
     ],
     child: const AdvancedTodoApp(),
   );
+}
+
+/// Settings is a long lazy list — off-screen tiles are not built, so tests
+/// that reach for one further down must scroll it into view first.
+Future<void> scrollToKey(WidgetTester tester, Key key) async {
+  await tester.dragUntilVisible(
+    find.byKey(key),
+    find.byType(Scrollable).first,
+    const Offset(0, -120),
+  );
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -50,6 +66,62 @@ void main() {
 
     expect(find.byKey(const Key('email')), findsOneWidget);
     expect(find.text('Sign in'), findsOneWidget);
+  });
+
+  testWidgets('forgot password sends a reset link for the typed address',
+      (tester) async {
+    final repo = FakeAuthRepository();
+    await tester.pumpWidget(appWith(repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('email')), 'a@b.com');
+    await tester.tap(find.byKey(const Key('forgot-password')));
+    await tester.pumpAndSettle();
+
+    // The dialog starts from what was already typed.
+    expect(
+      tester
+          .widget<TextFormField>(find.byKey(const Key('reset-email')))
+          .controller!
+          .text,
+      'a@b.com',
+    );
+    await tester.tap(find.byKey(const Key('send-reset')));
+    await tester.pumpAndSettle();
+
+    expect(repo.resetRequests, ['a@b.com']);
+    // Deliberately non-committal about whether the account exists.
+    expect(find.textContaining('If a@b.com has an account'), findsOneWidget);
+  });
+
+  testWidgets('forgot password rejects a malformed address', (tester) async {
+    final repo = FakeAuthRepository();
+    await tester.pumpWidget(appWith(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('forgot-password')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('reset-email')), 'nope');
+    await tester.tap(find.byKey(const Key('send-reset')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Enter a valid email'), findsOneWidget);
+    expect(repo.resetRequests, isEmpty);
+  });
+
+  testWidgets('a failed reset surfaces the error', (tester) async {
+    final repo = FakeAuthRepository()
+      ..resetError = const AuthException('Network error. Check your connection.');
+    await tester.pumpWidget(appWith(repo));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byKey(const Key('email')), 'a@b.com');
+    await tester.tap(find.byKey(const Key('forgot-password')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('send-reset')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Network error. Check your connection.'), findsOneWidget);
   });
 
   testWidgets(
@@ -148,6 +220,143 @@ void main() {
         .singleWhere((e) => e.key.startsWith('users/u/tasks/'));
     expect(taskDoc.value['title'], 'Meditate');
     expect(taskDoc.value['durationDays'], 7);
+  });
+
+  testWidgets('creating a "many times a day" task stores its window',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    await tester.pumpWidget(appWith(repo, gateway: gateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-task')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('task-title')), 'Drink water');
+
+    // Reminder time disappears: intraday tasks take their times from the
+    // window instead.
+    expect(find.byKey(const Key('task-reminder')), findsOneWidget);
+    await tester.scrollUntilVisible(find.byKey(const Key('task-repeat')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.text('Many times a day'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('task-reminder')), findsNothing);
+
+    await tester.enterText(find.byKey(const Key('task-target')), '8');
+    await tester.pumpAndSettle();
+    // Default window 08:00–20:00 every 90 min ⇒ 9 reminders, target 8.
+    expect(
+      tester
+          .widget<Text>(find.byKey(const Key('task-repeat-summary')))
+          .data,
+      'Every 1h 30m, 08:00–20:00 · 8× a day',
+    );
+
+    await tester.scrollUntilVisible(find.byKey(const Key('task-submit')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.byKey(const Key('task-submit')));
+    await tester.pumpAndSettle();
+
+    final doc = gateway.docs.entries
+        .singleWhere((e) => e.key.startsWith('users/u/tasks/'))
+        .value;
+    final recurrence = doc['recurrence'] as Map<String, dynamic>;
+    expect(recurrence['kind'], 'intraday');
+    expect(recurrence['startTime'], '08:00');
+    expect(recurrence['endTime'], '20:00');
+    expect(recurrence['intervalMinutes'], 90);
+    expect(recurrence['targetPerDay'], 8);
+  });
+
+  testWidgets('creating a target-days task pins its goal', (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    await tester.pumpWidget(appWith(repo, gateway: gateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('add-task')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const Key('task-title')), 'Meditate');
+    await tester.enterText(find.byKey(const Key('task-duration')), '21');
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('rule-targetDays')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.byKey(const Key('rule-targetDays')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.byKey(const Key('task-submit')), 200,
+        scrollable: find.byType(Scrollable).first);
+    await tester.tap(find.byKey(const Key('task-submit')));
+    await tester.pumpAndSettle();
+
+    final doc = gateway.docs.entries
+        .singleWhere((e) => e.key.startsWith('users/u/tasks/'))
+        .value;
+    expect(doc['completionMode'], 'targetDays');
+    // Pinned now, so later end-date extensions cannot move the goal.
+    expect(doc['targetDays'], 21);
+  });
+
+  testWidgets('a target-days task that fell behind rolls its end date forward',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    // Started 3 days ago, 3-day goal, nothing ticked ⇒ must run to
+    // 2026-07-15 (day 1 of the remaining three is today).
+    gateway.docs['users/u/tasks/t1'] = {
+      'title': 'Meditate',
+      'startDate': '2026-07-11',
+      'durationDays': 3,
+      'completionMode': 'targetDays',
+      'targetDays': 3,
+      'status': 'active',
+      'createdAt': DateTime.utc(2026, 7, 11),
+      'updatedAt': DateTime.utc(2026, 7, 11),
+    };
+    await tester.pumpWidget(appWith(repo, gateway: gateway));
+    await tester.pumpAndSettle();
+
+    expect(gateway.docs['users/u/tasks/t1']!['durationDays'], 5);
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2026-07-11 → 2026-07-15'), findsOneWidget);
+    expect(find.textContaining('target 3 done'), findsOneWidget);
+  });
+
+  testWidgets('the completion rule can be changed on an existing task',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    gateway.docs['users/u/tasks/t1'] = {
+      'title': 'Meditate',
+      'startDate': '2026-07-13',
+      'durationDays': 7,
+      'status': 'active',
+      'createdAt': DateTime.utc(2026, 7, 13),
+      'updatedAt': DateTime.utc(2026, 7, 13),
+    };
+    await tester.pumpWidget(appWith(repo, gateway: gateway));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Tasks'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('task-menu-t1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Completion rule'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('rule-targetDays')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.docs['users/u/tasks/t1']!['completionMode'], 'targetDays');
+    expect(gateway.docs['users/u/tasks/t1']!['targetDays'], 7);
   });
 
   testWidgets('creating a task re-syncs reminders with the new task',
@@ -262,6 +471,7 @@ void main() {
 
       await tester.tap(find.text('Settings'));
       await tester.pumpAndSettle();
+      await scrollToKey(tester, const Key('theme-mode'));
       await tester.tap(find.byKey(const Key('theme-mode')));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Dark').last);
@@ -296,6 +506,21 @@ void main() {
     });
   });
 
+  testWidgets('settings names the running build', (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    await tester.pumpWidget(appWith(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await scrollToKey(tester, const Key('about-build'));
+
+    // Tests run without the Makefile's --dart-define stamps, so this is the
+    // unstamped case; release artifacts show "build <count>.<sha>".
+    expect(find.text('DayForge 1.0.0 (dev build)'), findsOneWidget);
+  });
+
   testWidgets('settings test-notification tile fires an immediate one',
       (tester) async {
     final repo =
@@ -306,11 +531,105 @@ void main() {
 
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
+    await scrollToKey(tester, const Key('test-notification'));
     await tester.tap(find.byKey(const Key('test-notification')));
     await tester.pumpAndSettle();
 
     expect(scheduler.shownNow, hasLength(1));
     expect(scheduler.shownNow.single, contains('Test notification'));
+  });
+
+  testWidgets('picking a reminder sound persists it, previews it and re-syncs',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    final scheduler = FakeReminderScheduler();
+    await tester.pumpWidget(
+        appWith(repo, gateway: gateway, scheduler: scheduler));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    // Default is the alarm tone — reminders exist to be noticed.
+    expect(find.text('Alarm (loud)'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('reminder-sound')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sound-preview-chime')));
+    await tester.pumpAndSettle();
+    expect(scheduler.shownSounds.last.sound.id, 'chime');
+
+    await tester.tap(find.byKey(const Key('sound-chime')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.docs['users/u/settings/app']?['reminderSoundId'], 'chime');
+    expect(scheduler.lastOptions?.sound.sound.id, 'chime');
+  });
+
+
+  testWidgets('device sound pick stores the URI and label (Android only)',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    final scheduler = FakeReminderScheduler();
+    final picker = FakeDeviceSoundPicker(
+      result: (uri: 'content://media/alarm/7', label: 'Oxygen'),
+    );
+    await tester.pumpWidget(appWith(repo,
+        gateway: gateway, scheduler: scheduler, soundPicker: picker));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('reminder-sound')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byKey(const Key('sound-device')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('sound-device')));
+    await tester.pumpAndSettle();
+
+    final saved = gateway.docs['users/u/settings/app']!;
+    expect(saved['reminderSoundId'], 'device');
+    expect(saved['deviceSoundUri'], 'content://media/alarm/7');
+    expect(saved['deviceSoundLabel'], 'Oxygen');
+    expect(scheduler.lastOptions?.sound.usesDeviceSound, isTrue);
+    expect(find.text('Oxygen'), findsOneWidget);
+  });
+
+  testWidgets('platforms without a system picker do not offer one',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    await tester.pumpWidget(appWith(repo));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('reminder-sound')));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('sound-device')), findsNothing);
+  });
+
+  testWidgets('alarm volume switch persists and reaches the scheduler',
+      (tester) async {
+    final repo =
+        FakeAuthRepository(initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
+    final gateway = FakeFirestoreGateway();
+    final scheduler = FakeReminderScheduler();
+    await tester.pumpWidget(
+        appWith(repo, gateway: gateway, scheduler: scheduler));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('alarm-volume')));
+    await tester.pumpAndSettle();
+
+    expect(gateway.docs['users/u/settings/app']?['alarmVolume'], false);
+    expect(scheduler.lastOptions?.sound.alarmVolume, isFalse);
   });
 
   testWidgets('changing snooze duration re-syncs reminders with it',
@@ -370,9 +689,11 @@ void main() {
         };
 
     late FakeFirestoreGateway gateway;
+    late FakeReminderScheduler scheduler;
 
     setUp(() {
       gateway = FakeFirestoreGateway();
+      scheduler = FakeReminderScheduler();
       gateway.docs['users/u/tasks/t1'] =
           seedTask('Meditate', '2026-07-13', 7);
       gateway.docs['users/u/tasks/t2'] =
@@ -382,7 +703,8 @@ void main() {
     Future<void> pumpSignedIn(WidgetTester tester) async {
       final repo = FakeAuthRepository(
           initialUser: const AppUser(uid: 'u', email: 'a@b.com'));
-      await tester.pumpWidget(appWith(repo, gateway: gateway));
+      await tester.pumpWidget(
+          appWith(repo, gateway: gateway, scheduler: scheduler));
       await tester.pumpAndSettle();
     }
 
@@ -424,6 +746,81 @@ void main() {
       expect(unticked!['completed'], isFalse);
       expect(unticked['completedAt'], isNull);
       expect(unticked['date'], '2026-07-13');
+    });
+
+    testWidgets(
+        'ticking early drops today\'s reminder; unticking restores it',
+        (tester) async {
+      await pumpSignedIn(tester);
+
+      // Before the tick the task is armed for today.
+      expect(scheduler.lastOptions?.completedToday, isEmpty);
+
+      await tester.tap(find.byKey(const ValueKey('tick-t1')));
+      await tester.pumpAndSettle();
+
+      expect(scheduler.lastOptions?.completedToday, contains('t1'));
+
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('completed-toggle')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tick-t1')));
+      await tester.pumpAndSettle();
+
+      expect(scheduler.lastOptions?.completedToday, isEmpty);
+    });
+
+    testWidgets('an intraday task counts ticks up to its daily target',
+        (tester) async {
+      gateway.docs['users/u/tasks/t3'] = {
+        ...seedTask('Drink water', '2026-07-13', 21),
+        'recurrence': {
+          'kind': 'intraday',
+          'startTime': '08:00',
+          'endTime': '20:00',
+          'intervalMinutes': 240,
+          'targetPerDay': 3,
+        },
+      };
+      await pumpSignedIn(tester);
+
+      expect(find.byKey(const ValueKey('count-t3')), findsOneWidget);
+      expect(tester.widget<Text>(find.byKey(const ValueKey('count-t3'))).data,
+          '0/3');
+
+      await tester.tap(find.byKey(const ValueKey('tick-t3')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Text>(find.byKey(const ValueKey('count-t3'))).data,
+          '1/3');
+      var log = gateway.docs['users/u/tasks/t3/daily_logs/2026-07-13']!;
+      expect(log['count'], 1);
+      expect(log['completed'], isFalse);
+      // Partial progress must not silence the rest of the day's reminders.
+      expect(scheduler.lastOptions?.completedToday, isNot(contains('t3')));
+
+      await tester.tap(find.byKey(const ValueKey('tick-t3')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('tick-t3')));
+      await tester.pumpAndSettle();
+
+      log = gateway.docs['users/u/tasks/t3/daily_logs/2026-07-13']!;
+      expect(log['count'], 3);
+      expect(log['completed'], isTrue);
+      expect(scheduler.lastOptions?.completedToday, contains('t3'));
+
+      // Undo one: the day is no longer complete and reminders come back.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('completed-toggle')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('untick-t3')));
+      await tester.pumpAndSettle();
+
+      log = gateway.docs['users/u/tasks/t3/daily_logs/2026-07-13']!;
+      expect(log['count'], 2);
+      expect(log['completed'], isFalse);
+      expect(scheduler.lastOptions?.completedToday, isNot(contains('t3')));
     });
 
     testWidgets('submitting a remark persists it beside the checkbox',

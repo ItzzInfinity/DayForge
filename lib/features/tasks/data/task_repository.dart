@@ -1,5 +1,7 @@
 import '../../../core/utils/id_generator.dart';
 import '../../../services/firestore/firestore_gateway.dart';
+import '../domain/recurrence.dart';
+import '../domain/rollover.dart';
 import '../domain/task.dart';
 
 /// CRUD for `users/{uid}/tasks` on top of [FirestoreGateway], so it works
@@ -20,6 +22,8 @@ class TaskRepository {
     required String startDate,
     required int durationDays,
     String? reminderTime,
+    Recurrence recurrence = const Recurrence.daily(),
+    CompletionMode completionMode = CompletionMode.fixedWindow,
   }) async {
     final now = DateTime.now().toUtc();
     final task = Task(
@@ -30,6 +34,12 @@ class TaskRepository {
       startDate: startDate,
       durationDays: durationDays,
       reminderTime: reminderTime,
+      recurrence: recurrence,
+      completionMode: completionMode,
+      // Recorded up front so later end-date extensions never move the goal.
+      targetDays: completionMode == CompletionMode.targetDays
+          ? durationDays
+          : null,
       createdAt: now,
       updatedAt: now,
     );

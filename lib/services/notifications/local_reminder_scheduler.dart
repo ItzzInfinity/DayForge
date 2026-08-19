@@ -32,12 +32,13 @@ Future<void> notificationActionBackground(NotificationResponse response) async {
       scheduledDate: tz.TZDateTime.now(tz.UTC)
           .add(Duration(minutes: payload.minutes)),
       notificationDetails:
-          LocalReminderScheduler.reminderDetails(payload.minutes),
+          LocalReminderScheduler.reminderDetails(payload.minutes,
+              sound: payload.sound),
       payload: response.payload,
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
     );
   } else if (response.actionId == markDoneActionId) {
-    await markCompletedFromBackground(payload.taskId);
+    await markCompletedFromBackground(payload.taskId, target: payload.target);
   }
 }
 
@@ -45,7 +46,8 @@ Future<void> notificationActionBackground(NotificationResponse response) async {
 /// same merge-safe document the Today screen writes, so nothing clobbers.
 /// The signed-in user comes from the native Firebase SDK, which persists
 /// sessions across processes; offline taps queue via Firestore persistence.
-Future<void> markCompletedFromBackground(String taskId) async {
+Future<void> markCompletedFromBackground(String taskId,
+    {int target = 1}) async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
     await Firebase.initializeApp(
@@ -69,15 +71,28 @@ Future<void> markCompletedFromBackground(String taskId) async {
     }
     final now = DateTime.now();
     final dateKey = toDateKey(now);
-    await FirebaseFirestore.instance
-        .doc('users/$uid/tasks/$taskId/daily_logs/$dateKey')
-        .set({
+    final doc = FirebaseFirestore.instance
+        .doc('users/$uid/tasks/$taskId/daily_logs/$dateKey');
+    // Intraday tasks (target > 1) count taps; the day completes on the last
+    // one. The payload carries the target, so this isolate never has to read
+    // the task document.
+    var count = 1;
+    if (target > 1) {
+      final existing = (await doc.get()).data();
+      final previous = (existing?['count'] as int?) ??
+          (((existing?['completed'] as bool?) ?? false) ? 1 : 0);
+      count = (previous + 1).clamp(0, target);
+    }
+    final completed = count >= target;
+    await doc.set({
       'date': dateKey,
-      'completed': true,
-      'completedAt': now.toUtc(),
+      'count': count,
+      'completed': completed,
+      'completedAt': completed ? now.toUtc() : null,
       'updatedAt': now.toUtc(),
     }, SetOptions(merge: true));
-    debugPrint('reminders: marked $taskId completed for $dateKey (background)');
+    debugPrint('reminders: recorded $taskId $count/$target for $dateKey '
+        '(background)');
   } catch (e) {
     debugPrint('reminders: background mark-done failed: $e');
   }
@@ -141,7 +156,8 @@ class LocalReminderScheduler implements ReminderScheduler {
       if (handler != null) {
         await handler(payload.taskId);
       } else if (Platform.isAndroid) {
-        await markCompletedFromBackground(payload.taskId);
+        await markCompletedFromBackground(payload.taskId,
+            target: payload.target);
       }
       return;
     }
@@ -158,7 +174,8 @@ class LocalReminderScheduler implements ReminderScheduler {
           id: id,
           title: payload.title,
           body: payload.body,
-          notificationDetails: reminderDetails(payload.minutes),
+          notificationDetails:
+              reminderDetails(payload.minutes, sound: payload.sound),
           payload: response.payload,
         );
       });
@@ -169,7 +186,8 @@ class LocalReminderScheduler implements ReminderScheduler {
         body: payload.body,
         scheduledDate: tz.TZDateTime.now(tz.UTC)
             .add(Duration(minutes: payload.minutes)),
-        notificationDetails: reminderDetails(payload.minutes),
+        notificationDetails:
+            reminderDetails(payload.minutes, sound: payload.sound),
         payload: response.payload,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
@@ -188,20 +206,61 @@ class LocalReminderScheduler implements ReminderScheduler {
     return true; // Windows/Linux have no runtime notification permission.
   }
 
+  /// Android sound for [choice]; null means "the channel's default sound".
+  static AndroidNotificationSound? _androidSound(ReminderSoundChoice choice) {
+    if (choice.usesDeviceSound) {
+      return UriAndroidNotificationSound(choice.deviceUri!);
+    }
+    final resource = choice.sound.resource;
+    return resource == null ? null : RawResourceAndroidNotificationSound(resource);
+  }
+
+  /// Linux plays the bundled asset directly; a device URI is Android-only, so
+  /// Linux falls back to the notification server's own sound.
+  static LinuxNotificationSound? _linuxSound(ReminderSoundChoice choice) {
+    final asset = choice.sound.assetPath;
+    return asset == null ? null : AssetsLinuxSound(asset);
+  }
+
+  /// Windows has no custom audio outside MSIX packages, so the bundled tones
+  /// map onto the closest built-in toast sounds.
+  static WindowsNotificationAudio _windowsAudio(ReminderSoundChoice choice) {
+    if (choice.isSilent) return WindowsNotificationAudio.silent();
+    final preset = switch (choice.sound.id) {
+      'alarm' || 'buzz' => WindowsNotificationSound.alarm2,
+      'bell' || 'chime' => WindowsNotificationSound.reminder,
+      'beep' => WindowsNotificationSound.im,
+      _ => WindowsNotificationSound.defaultSound,
+    };
+    return WindowsNotificationAudio.preset(sound: preset);
+  }
+
   /// Reminder details: Mark completed + Snooze buttons (Android + Linux;
   /// the Windows plugin has no action support, so toasts there are plain).
   /// On Android the notification is persistent (`ongoing`, no auto-cancel):
   /// it stays in the tray until touched or marked completed.
-  static NotificationDetails reminderDetails(int snoozeMinutes) =>
+  ///
+  /// The Android channel id varies with the chosen sound ([
+  /// ReminderSoundChoice.channelKey]) because channels are immutable once
+  /// created — reusing one id would freeze the very first sound forever.
+  static NotificationDetails reminderDetails(
+    int snoozeMinutes, {
+    ReminderSoundChoice sound = const ReminderSoundChoice(),
+  }) =>
       NotificationDetails(
         android: AndroidNotificationDetails(
-          'daily_reminders',
-          'Daily reminders',
+          sound.channelKey,
+          'Daily reminders (${sound.label})',
           channelDescription: 'Reminds you to tick your daily tasks',
           importance: Importance.high,
           priority: Priority.high,
           ongoing: true,
           autoCancel: false,
+          playSound: !sound.isSilent,
+          sound: _androidSound(sound),
+          audioAttributesUsage: sound.alarmVolume
+              ? AudioAttributesUsage.alarm
+              : AudioAttributesUsage.notification,
           actions: [
             AndroidNotificationAction(
               markDoneActionId,
@@ -218,6 +277,8 @@ class LocalReminderScheduler implements ReminderScheduler {
           ],
         ),
         linux: LinuxNotificationDetails(
+          sound: _linuxSound(sound),
+          suppressSound: sound.isSilent,
           actions: [
             LinuxNotificationAction(
               key: markDoneActionId,
@@ -229,32 +290,47 @@ class LocalReminderScheduler implements ReminderScheduler {
             ),
           ],
         ),
-        windows: const WindowsNotificationDetails(),
+        windows: WindowsNotificationDetails(audio: _windowsAudio(sound)),
       );
 
-  /// Plain details for one-off notifications (test notification).
-  NotificationDetails get _details => const NotificationDetails(
+  /// Plain details for one-off notifications (test notification / sound
+  /// preview): same channel and sound as a real reminder, without the
+  /// persistence and action buttons.
+  static NotificationDetails _details(ReminderSoundChoice sound) =>
+      NotificationDetails(
         android: AndroidNotificationDetails(
-          'daily_reminders',
-          'Daily reminders',
+          sound.channelKey,
+          'Daily reminders (${sound.label})',
           channelDescription: 'Reminds you to tick your daily tasks',
           importance: Importance.high,
           priority: Priority.high,
+          playSound: !sound.isSilent,
+          sound: _androidSound(sound),
+          audioAttributesUsage: sound.alarmVolume
+              ? AudioAttributesUsage.alarm
+              : AudioAttributesUsage.notification,
         ),
-        linux: LinuxNotificationDetails(),
-        windows: WindowsNotificationDetails(),
+        linux: LinuxNotificationDetails(
+          sound: _linuxSound(sound),
+          suppressSound: sound.isSilent,
+        ),
+        windows: WindowsNotificationDetails(audio: _windowsAudio(sound)),
       );
 
   String _bodyFor(Task task) => 'Time to tick "${task.title}" for today.';
 
   @override
-  Future<void> showNow({required String title, required String body}) async {
+  Future<void> showNow({
+    required String title,
+    required String body,
+    ReminderSoundChoice sound = const ReminderSoundChoice(),
+  }) async {
     await _init();
     await _plugin.show(
       id: 1, // fixed id: repeated tests replace rather than pile up
       title: title,
       body: body,
-      notificationDetails: _details,
+      notificationDetails: _details(sound),
     );
   }
 
@@ -262,9 +338,11 @@ class LocalReminderScheduler implements ReminderScheduler {
   Future<void> sync(
     List<Task> tasks,
     DateTime now, {
-    String defaultTime = defaultReminderTime,
-    int snoozeMinutes = defaultSnoozeMinutes,
+    ReminderOptions options = const ReminderOptions(),
   }) async {
+    final defaultTime = options.defaultTime;
+    final snoozeMinutes = options.snoozeMinutes;
+    final sound = options.sound;
     await _init();
     // Small task counts: clearing and re-adding is the simplest way to stay
     // correct across edits, archives, and expired tasks.
@@ -278,54 +356,72 @@ class LocalReminderScheduler implements ReminderScheduler {
     for (final task in tasks) {
       if (task.status != TaskStatus.active) continue;
       if (task.endDate.compareTo(todayKey) < 0) continue;
-      final time = parseHhMm(task.reminderTime ?? defaultTime);
-      final baseId = stableNotificationId(task.id) * 10;
+      final doneToday = options.completedToday.contains(task.id);
+      final baseId = stableNotificationId(task.id) * notificationSlotsPerTask;
       final payload = encodeReminderPayload(
         title: 'DayForge',
         body: _bodyFor(task),
         minutes: snoozeMinutes,
         taskId: task.id,
+        sound: sound,
+        target: task.targetPerDay,
       );
+      // One reminder a day, or every slot of an intraday window. Either way
+      // the same per-occurrence scheduling runs below.
+      final times = reminderTimesFor(task, defaultTime: defaultTime);
+      var slot = 0;
 
-      if (Platform.isAndroid) {
-        await _plugin.zonedSchedule(
-          id: baseId,
-          title: 'DayForge',
-          body: _bodyFor(task),
-          scheduledDate: tz.TZDateTime.from(
-            nextOccurrence(now, time.hour, time.minute).toUtc(),
-            tz.UTC,
-          ),
-          notificationDetails: reminderDetails(snoozeMinutes),
-          payload: payload,
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          matchDateTimeComponents: DateTimeComponents.time,
-        );
-      } else if (Platform.isWindows) {
-        // No repeating toasts on Windows: schedule the coming week and
-        // refresh on every launch/sync.
-        var when = nextOccurrence(now, time.hour, time.minute);
-        for (var i = 0; i < _windowsDaysAhead; i++) {
-          if (toDateKey(when).compareTo(task.endDate) > 0) break;
+      for (final time in times) {
+        // Windows burns a slot per day per occurrence, so it may run out
+        // before the week is up; the next launch schedules the rest.
+        if (slot >= notificationSlotsPerTask - 1) break;
+        final firstAt = nextReminderInstant(now, time.hour, time.minute,
+            doneToday: doneToday);
+        // Ticked already, or the run ends before this slot comes round again.
+        if (toDateKey(firstAt).compareTo(task.endDate) > 0) continue;
+
+        if (Platform.isAndroid) {
           await _plugin.zonedSchedule(
-            id: baseId + i,
+            id: baseId + slot,
             title: 'DayForge',
             body: _bodyFor(task),
-            scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
-            notificationDetails: reminderDetails(snoozeMinutes),
+            scheduledDate: tz.TZDateTime.from(firstAt.toUtc(), tz.UTC),
+            notificationDetails: reminderDetails(snoozeMinutes, sound: sound),
             payload: payload,
             androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            matchDateTimeComponents: DateTimeComponents.time,
           );
-          when = when.add(const Duration(days: 1));
+          slot++;
+        } else if (Platform.isWindows) {
+          // No repeating toasts on Windows: schedule the coming week and
+          // refresh on every launch/sync.
+          var when = firstAt;
+          for (var day = 0; day < _windowsDaysAhead; day++) {
+            if (toDateKey(when).compareTo(task.endDate) > 0) break;
+            if (slot >= notificationSlotsPerTask - 1) break;
+            await _plugin.zonedSchedule(
+              id: baseId + slot,
+              title: 'DayForge',
+              body: _bodyFor(task),
+              scheduledDate: tz.TZDateTime.from(when.toUtc(), tz.UTC),
+              notificationDetails: reminderDetails(snoozeMinutes, sound: sound),
+              payload: payload,
+              androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            );
+            when = when.add(const Duration(days: 1));
+            slot++;
+          }
+        } else if (Platform.isLinux) {
+          _scheduleLinuxTimer(task, time.hour, time.minute, baseId + slot,
+              snoozeMinutes, payload, sound,
+              doneToday: doneToday);
+          slot++;
         }
-      } else if (Platform.isLinux) {
-        _scheduleLinuxTimer(task, time.hour, time.minute, baseId,
-            snoozeMinutes, payload);
       }
       debugPrint(
-        'reminders: armed "${task.title}" daily at '
-        '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')} '
-        '(id $baseId, until ${task.endDate}, snooze ${snoozeMinutes}m)',
+        'reminders: armed "${task.title}" — ${times.length} time(s)/day '
+        '(${task.recurrence.summary}, ids $baseId+, until ${task.endDate}, '
+        'snooze ${snoozeMinutes}m${doneToday ? ', done today' : ''})',
       );
     }
   }
@@ -333,9 +429,10 @@ class LocalReminderScheduler implements ReminderScheduler {
   /// Linux has no OS-level scheduling; fire from an in-app timer while the
   /// app is running, then re-arm for the next day.
   void _scheduleLinuxTimer(Task task, int hour, int minute, int id,
-      int snoozeMinutes, String payload) {
+      int snoozeMinutes, String payload, ReminderSoundChoice sound,
+      {bool doneToday = false}) {
     final now = DateTime.now();
-    final next = nextOccurrence(now, hour, minute);
+    final next = nextReminderInstant(now, hour, minute, doneToday: doneToday);
     if (toDateKey(next).compareTo(task.endDate) > 0) return;
     _linuxTimers[id] = Timer(next.difference(now), () async {
       try {
@@ -343,14 +440,15 @@ class LocalReminderScheduler implements ReminderScheduler {
           id: id,
           title: 'DayForge',
           body: _bodyFor(task),
-          notificationDetails: reminderDetails(snoozeMinutes),
+          notificationDetails: reminderDetails(snoozeMinutes, sound: sound),
           payload: payload,
         );
         debugPrint('reminders: fired "${task.title}" (id $id)');
       } catch (e) {
         debugPrint('reminders: show failed for "${task.title}": $e');
       } finally {
-        _scheduleLinuxTimer(task, hour, minute, id, snoozeMinutes, payload);
+        _scheduleLinuxTimer(
+            task, hour, minute, id, snoozeMinutes, payload, sound);
       }
     });
   }

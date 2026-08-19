@@ -25,11 +25,43 @@ class DailyLogRepository {
       {
         'date': dateKey,
         'completed': completed,
+        // A plain daily task is 0 or 1; keeping the count in step means the
+        // two tick paths never disagree about the same day.
+        'count': completed ? 1 : 0,
         'completedAt': completed ? now : null,
         'updatedAt': now,
       },
       merge: true,
     );
+  }
+
+  /// Records one tick of an intraday task ([delta] of -1 undoes it) and
+  /// keeps `completed` in step with the day's [target]. Read-then-write
+  /// rather than an atomic increment: the REST gateway (Linux) has no
+  /// increment operator, and a lost race here costs at most one tick, which
+  /// the user can simply tap again.
+  Future<int> addTick(
+    String taskId,
+    String dateKey, {
+    required int target,
+    int delta = 1,
+  }) async {
+    final current = await get(taskId, dateKey);
+    final count = ((current?.count ?? 0) + delta).clamp(0, target);
+    final completed = count >= target;
+    final now = DateTime.now().toUtc();
+    await _gateway.setDocument(
+      _doc(taskId, dateKey),
+      {
+        'date': dateKey,
+        'count': count,
+        'completed': completed,
+        'completedAt': completed ? (current?.completedAt ?? now) : null,
+        'updatedAt': now,
+      },
+      merge: true,
+    );
+    return count;
   }
 
   Future<void> setRemark(String taskId, String dateKey, String remark) {

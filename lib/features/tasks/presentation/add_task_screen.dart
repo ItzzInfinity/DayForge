@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/providers.dart';
 import '../../../core/utils/date_utils.dart';
 import '../../settings/providers.dart';
+import '../domain/recurrence.dart';
+import '../domain/rollover.dart';
 import '../domain/task.dart';
 import '../providers.dart';
 
@@ -40,12 +42,39 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
   TimeOfDay? _reminder;
   bool _busy = false;
 
+  CompletionMode _completionMode = CompletionMode.fixedWindow;
+
+  /// Intraday state — only read when [_repeatsIntraday] is true.
+  bool _repeatsIntraday = false;
+  TimeOfDay _windowStart = const TimeOfDay(hour: 8, minute: 0);
+  TimeOfDay _windowEnd = const TimeOfDay(hour: 20, minute: 0);
+  int _intervalMinutes = 90;
+  final _target = TextEditingController();
+
+  /// Intervals offered for "remind me every…".
+  static const intervalChoices = [15, 30, 45, 60, 90, 120, 180, 240];
+
+  static String _hhmm(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:'
+      '${t.minute.toString().padLeft(2, '0')}';
+
+  /// The recurrence the form currently describes.
+  Recurrence get _recurrence => _repeatsIntraday
+      ? Recurrence.intraday(
+          startTime: _hhmm(_windowStart),
+          endTime: _hhmm(_windowEnd),
+          intervalMinutes: _intervalMinutes,
+          targetPerDay: int.tryParse(_target.text.trim()),
+        )
+      : const Recurrence.daily();
+
   @override
   void dispose() {
     _title.dispose();
     _description.dispose();
     _category.dispose();
     _duration.dispose();
+    _target.dispose();
     super.dispose();
   }
 
@@ -97,6 +126,21 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
     if (picked != null) setState(() => _startDate = picked);
   }
 
+  Future<void> _pickWindowTime({required bool start}) async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: start ? _windowStart : _windowEnd,
+    );
+    if (picked == null) return;
+    setState(() {
+      if (start) {
+        _windowStart = picked;
+      } else {
+        _windowEnd = picked;
+      }
+    });
+  }
+
   Future<void> _pickReminder() async {
     final picked = await showTimePicker(
       context: context,
@@ -123,10 +167,9 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
         ],
         startDate: toDateKey(_startDate),
         durationDays: int.parse(_duration.text.trim()),
-        reminderTime: _reminder == null
-            ? null
-            : '${_reminder!.hour.toString().padLeft(2, '0')}:'
-                  '${_reminder!.minute.toString().padLeft(2, '0')}',
+        reminderTime: _reminder == null ? null : _hhmm(_reminder!),
+        recurrence: _recurrence,
+        completionMode: _completionMode,
       );
       // The task list stream re-reads on resubscribe; refresh it now so the
       // new task shows immediately even on the polling (Linux) gateway.
@@ -250,18 +293,175 @@ class _AddTaskScreenState extends ConsumerState<AddTaskScreen> {
                     subtitle: Text(toDateKey(_startDate)),
                     onTap: _pickStartDate,
                   ),
-                  ListTile(
-                    key: const Key('task-reminder'),
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.alarm),
-                    title: const Text('Reminder time'),
-                    subtitle: Text(
-                      _reminder == null
-                          ? 'None (uses the global default once reminders ship)'
-                          : _reminder!.format(context),
+                  const SizedBox(height: 8),
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Completion rule',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
                     ),
-                    onTap: _pickReminder,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        RadioGroup<CompletionMode>(
+                          groupValue: _completionMode,
+                          onChanged: (mode) => setState(() =>
+                              _completionMode = mode ?? _completionMode),
+                          child: const Column(
+                            children: [
+                              RadioListTile<CompletionMode>(
+                                key: Key('rule-fixedWindow'),
+                                value: CompletionMode.fixedWindow,
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: Text('Fixed window'),
+                                subtitle: Text(
+                                    'Ends on the end date, whatever happens'),
+                              ),
+                              RadioListTile<CompletionMode>(
+                                key: Key('rule-targetDays'),
+                                value: CompletionMode.targetDays,
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: Text('Target days'),
+                                subtitle: Text('Runs until that many days are '
+                                    'actually completed — missed days move '
+                                    'the end date forward'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(height: 8),
+                  InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Repeat',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.all(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        SegmentedButton<bool>(
+                          key: const Key('task-repeat'),
+                          segments: const [
+                            ButtonSegment(
+                              value: false,
+                              label: Text('Once a day'),
+                              icon: Icon(Icons.today),
+                            ),
+                            ButtonSegment(
+                              value: true,
+                              label: Text('Many times a day'),
+                              icon: Icon(Icons.repeat),
+                            ),
+                          ],
+                          selected: {_repeatsIntraday},
+                          onSelectionChanged: (selection) => setState(
+                            () => _repeatsIntraday = selection.first,
+                          ),
+                        ),
+                        if (_repeatsIntraday) ...[
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ListTile(
+                                  key: const Key('task-window-start'),
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('From'),
+                                  subtitle: Text(_hhmm(_windowStart)),
+                                  onTap: () => _pickWindowTime(start: true),
+                                ),
+                              ),
+                              Expanded(
+                                child: ListTile(
+                                  key: const Key('task-window-end'),
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text('Until'),
+                                  subtitle: Text(_hhmm(_windowEnd)),
+                                  onTap: () => _pickWindowTime(start: false),
+                                ),
+                              ),
+                            ],
+                          ),
+                          DropdownButtonFormField<int>(
+                            key: const Key('task-interval'),
+                            initialValue: _intervalMinutes,
+                            decoration: const InputDecoration(
+                              labelText: 'Remind me every',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              for (final minutes in intervalChoices)
+                                DropdownMenuItem(
+                                  value: minutes,
+                                  child: Text(
+                                    minutes < 60
+                                        ? '$minutes minutes'
+                                        : minutes % 60 == 0
+                                        ? '${minutes ~/ 60} hour'
+                                              '${minutes == 60 ? '' : 's'}'
+                                        : '${minutes ~/ 60}h '
+                                              '${minutes % 60}m',
+                                  ),
+                                ),
+                            ],
+                            onChanged: (v) => setState(
+                              () => _intervalMinutes = v ?? _intervalMinutes,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          TextFormField(
+                            key: const Key('task-target'),
+                            controller: _target,
+                            decoration: InputDecoration(
+                              labelText: 'Ticks needed per day',
+                              helperText:
+                                  'Leave empty to need all '
+                                  '${_recurrence.occurrencesPerDay} '
+                                  'reminders',
+                              border: const OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                            onChanged: (_) => setState(() {}),
+                            validator: (v) {
+                              final text = (v ?? '').trim();
+                              if (text.isEmpty) return null;
+                              final target = int.tryParse(text);
+                              if (target == null || target < 1) {
+                                return 'Enter a number (1 or more)';
+                              }
+                              return null;
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            _recurrence.summary,
+                            key: const Key('task-repeat-summary'),
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Intraday tasks take their times from the window above.
+                  if (!_repeatsIntraday)
+                    ListTile(
+                      key: const Key('task-reminder'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(Icons.alarm),
+                      title: const Text('Reminder time'),
+                      subtitle: Text(
+                        _reminder == null
+                            ? 'None (uses the default reminder time)'
+                            : _reminder!.format(context),
+                      ),
+                      onTap: _pickReminder,
+                    ),
                   const SizedBox(height: 16),
                   FilledButton(
                     key: const Key('task-submit'),

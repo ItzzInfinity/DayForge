@@ -80,6 +80,7 @@ String exportToCsv(ExportBundle bundle) {
     'durationDays',
     'logDate',
     'completed',
+    'count',
     'completedAt',
     'remark',
   ];
@@ -96,7 +97,7 @@ String exportToCsv(ExportBundle bundle) {
       '${task.durationDays}',
     ];
     if (entry.logs.isEmpty) {
-      rows.add([...taskCells, '', '', '', '']);
+      rows.add([...taskCells, '', '', '', '', '']);
     }
     for (final log in entry.logs) {
       rows.add([
