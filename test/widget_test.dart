@@ -68,6 +68,36 @@ void main() {
     expect(find.text('Sign in'), findsOneWidget);
   });
 
+  testWidgets('the password field can be revealed and hidden again',
+      (tester) async {
+    await tester.pumpWidget(appWith(FakeAuthRepository()));
+    await tester.pumpAndSettle();
+
+    EditableText passwordField() => tester.widget<EditableText>(
+          find.descendant(
+            of: find.byKey(const Key('password')),
+            matching: find.byType(EditableText),
+          ),
+        );
+    final toggle = find.byKey(const Key('toggle-password-visibility'));
+
+    // Hidden by default, offering the "show" affordance.
+    expect(passwordField().obscureText, isTrue);
+    expect(
+      tester.widget<IconButton>(toggle).tooltip,
+      'Show password',
+    );
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(passwordField().obscureText, isFalse);
+    expect(tester.widget<IconButton>(toggle).tooltip, 'Hide password');
+
+    await tester.tap(toggle);
+    await tester.pumpAndSettle();
+    expect(passwordField().obscureText, isTrue);
+  });
+
   testWidgets('forgot password sends a reset link for the typed address',
       (tester) async {
     final repo = FakeAuthRepository();

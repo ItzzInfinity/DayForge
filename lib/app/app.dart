@@ -29,6 +29,10 @@ class AdvancedTodoApp extends ConsumerWidget {
     };
     return MaterialApp(
       title: 'DayForge',
+      // The debug ribbon never appears in a release build anyway, and it
+      // covers the top-right corner of every screenshot taken from a debug
+      // one (tool/screenshots).
+      debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
       themeMode: themeMode,

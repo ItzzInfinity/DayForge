@@ -21,6 +21,10 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
   bool _isRegister = false;
   bool _busy = false;
 
+  /// Password shown in the clear. Off every time the screen is built — a
+  /// revealed password should never survive leaving the screen.
+  bool _showPassword = false;
+
   @override
   void dispose() {
     _email.dispose();
@@ -175,11 +179,24 @@ class _SignInScreenState extends ConsumerState<SignInScreen> {
                   TextFormField(
                     key: const Key('password'),
                     controller: _password,
-                    decoration: const InputDecoration(
+                    decoration: InputDecoration(
                       labelText: 'Password',
-                      border: OutlineInputBorder(),
+                      border: const OutlineInputBorder(),
+                      // Same control on every platform: Android has no
+                      // system-provided reveal, and the Windows/Linux desktop
+                      // builds have no soft keyboard to offer one either.
+                      suffixIcon: IconButton(
+                        key: const Key('toggle-password-visibility'),
+                        icon: Icon(_showPassword
+                            ? Icons.visibility_off
+                            : Icons.visibility),
+                        tooltip:
+                            _showPassword ? 'Hide password' : 'Show password',
+                        onPressed: () =>
+                            setState(() => _showPassword = !_showPassword),
+                      ),
                     ),
-                    obscureText: true,
+                    obscureText: !_showPassword,
                     validator: (v) => (v == null || v.length < 6)
                         ? 'Password must be at least 6 characters'
                         : null,

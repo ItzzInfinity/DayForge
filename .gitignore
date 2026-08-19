@@ -55,3 +55,9 @@ dist/
 # manual-task.md M15.
 lib/firebase_options.dart
 android/app/google-services.json
+
+# Screenshot rig build products. The finished PNGs and GIFs in
+# docs/screenshots/ are committed (the README needs them); these are not.
+# tool/screenshots/capture.sh and build_font.py regenerate both.
+docs/screenshots/film/
+tool/screenshots/DayForgeSans-*.ttf

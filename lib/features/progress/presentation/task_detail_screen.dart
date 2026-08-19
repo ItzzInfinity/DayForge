@@ -79,7 +79,7 @@ class _DetailBody extends StatelessWidget {
           children: [
             if (progress.currentStreak > 0) ...[
               Chip(
-                avatar: const Text('🔥'),
+                avatar: const Icon(Icons.local_fire_department, size: 18),
                 label: Text('${progress.currentStreak} day'
                     '${progress.currentStreak == 1 ? '' : 's'}'),
                 visualDensity: VisualDensity.compact,

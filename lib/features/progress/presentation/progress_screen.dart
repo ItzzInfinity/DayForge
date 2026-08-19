@@ -312,7 +312,7 @@ class _ProgressCard extends ConsumerWidget {
                     if (progress.currentStreak > 0)
                       Chip(
                         key: ValueKey('streak-${task.id}'),
-                        avatar: const Text('🔥'),
+                        avatar: const Icon(Icons.local_fire_department, size: 18),
                         label: Text('${progress.currentStreak} day'
                             '${progress.currentStreak == 1 ? '' : 's'}'),
                         visualDensity: VisualDensity.compact,
