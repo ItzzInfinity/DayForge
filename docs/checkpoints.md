@@ -6,7 +6,7 @@
 
 - **Current phase:** All FSD phases + feedback rounds 1–5 done.
 - **Last completed task:** R5.7 — vector icon master + render script.
-- **Next task:** None queued. Validation: `flutter analyze && flutter test` (**160 tests**), then `make all`. Waiting on M13, M14, M15, M16.
+- **Next task:** None queued. Validation: `flutter analyze && flutter test` (**160 tests**), then `make all`. Waiting on M13, M14, M15, M16, M17.
 
 ### Session 14 summary — 160 tests passing, analyze clean
 1. **Divergent branches (R5.1):** `origin/main` had two commits the laptop lacked, both editing `lib/firebase_options.dart` — and they cancel out (`git diff 70eab8c origin/main` is empty), because the "replace keys with SECRET_KEY" web edit was undone by the very next commit. So the keys were never actually removed from the remote. `git rebase origin/main` replayed the one local commit on top; history is linear and the push is a fast-forward. Set `pull.rebase=true` for this repo.
@@ -32,6 +32,7 @@
 ### Blocked
 - **M13** — device verification of round 4 on Linux + Android.
 - **M14** — Firebase console check of the password-reset email.
+- **M17** — device verification of round 5 (majority rule, N-times-a-day, artifact names, icon, capped builds).
 - **M15** — Firebase config on a fresh clone; optional key rotation (nothing to do on this laptop).
 - **M16** — optional swap for this laptop.
 

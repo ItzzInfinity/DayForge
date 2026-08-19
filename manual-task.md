@@ -122,10 +122,7 @@ Fresh APK in `dist/dayforge-1.0.0.apk` after `make apk`. Fixes a silent no-op wh
 - [x] 3. Reopen the app → Today should show that task ticked for today (and the Firestore `daily_logs/<today>` doc has `completed: true`). Confirm it ticked the *right* task if you have several.
 
 ### M13 — Verify feedback-round-4 features (2026-08-17)
-Artifacts rebuilt 2026-08-18 (build id `13.70eab8c.dirty2026-08-18-0010` — "dirty" because round 4 is not committed yet; Settings → About shows this string, so you can confirm you are testing the right build):
-
-- Android — `dist/dayforge-1.0.0+13.70eab8c.dirty2026-08-18-0010.apk` (56 MB). Install over the old one; same app id as round 3, so your data stays and no uninstall is needed.
-- Linux — `dist/dayforge_1.0.0+13.70eab8c.dirty2026-08-18-0010_amd64.deb` (9.8 MB, `sudo dpkg -i <file>`), or just run `./build/linux/x64/release/bundle/advanced_todo`.
+**Use the round-5 artifacts below (M17) — they are committed, cleanly named and contain round 4 as well.** The old `dist/dayforge-1.0.0+13.70eab8c.dirty…` files are the superseded round-4 builds; you can delete them.
 
 - [ ] 1. **Sound picker:** Settings → Notifications → Reminder sound — pick each bundled tone and hit **Preview**; you should hear it. Pick "Alarm (loud)", then fire Settings → "Send a test notification" — it arrives *with that sound* at alarm volume.
 - [ ] 2. **Device sound (Android):** Settings → Reminder sound → **Pick from device…** — the system ringtone/alarm picker opens; choose an alarm; the setting shows its name and a real reminder uses it.
@@ -179,3 +176,18 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 - [ ] 2. Confirm with `make doctor` — the swap line stops warning.
 
+### M17 — Verify feedback-round-5 features (2026-08-19)
+Round 5 **is committed**, so the artifacts are named for the release with no build stamp in the filename — that was the point of the change. Settings → About still prints the full build id (`18.7d89b89`), which is how you confirm which build you are holding.
+
+- Android — `dist/dayforge-1.0.0.apk` (57 MB). Installs over the previous one; same app id, data is kept, no uninstall.
+- Linux — `dist/dayforge_1.0.0_amd64.deb` (8.6 MB, `sudo dpkg -i <file>`), or run `./build/linux/x64/release/bundle/advanced_todo`.
+
+- [ ] 1. **Names:** the two files above are named exactly that — no `+13.70eab8c.dirty…` tail. `make version` prints the same names.
+- [ ] 2. **Build id still reachable:** Settings → About shows `18.7d89b89`. (Build a file with an edited tree and it becomes `dayforge-1.0.0-dirty.apk` — that suffix is the guard against handing out an uncommitted build.)
+- [ ] 3. **Majority rule:** add "Drink water", Repeat = many times a day, window now→now+40 min, every 10 min (⇒ 5 reminders), and **leave "Ticks needed per day" empty**. The summary should read `… · 3 of 5 a day (over half)`. Tick 3 times → the day flips to complete.
+- [ ] 4. **…and you can keep going past it:** the +1 button stays enabled after 3/5; ticking on reads 4/5 then 5/5. It should not lock at the target.
+- [ ] 5. **Override still wins:** make another task the same way but type `5` in "Ticks needed per day" — the summary says `5× a day` and the day only completes at 5.
+- [ ] 6. **Existing tasks moved:** any intraday task you created before today that never had an explicit target now completes at the majority instead of every occurrence. This only ever *loosens* a day. Check one and confirm it looks right to you.
+- [ ] 7. **"N times a day":** on the add form switch the second toggle from **Every…** to **N times a day**, pick `8× a day` — the summary shows the derived interval spread across your window.
+- [ ] 8. **Icon:** the launcher icon and the Linux menu entry still show the anvil-calendar mark, now rendered from `assets/icon/dayforge.svg`. Look at it on the phone's home screen at normal size — that is the size it was checked at.
+- [ ] 9. **Builds don't take the machine down:** run `make doctor` (reports the ceiling and your RAM/swap), then `make all` while you keep working. It should stay usable, and if it ever does run out, only the build dies. If a build is killed: `make apk ABI=android-arm64`.
